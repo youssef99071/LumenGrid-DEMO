@@ -1,0 +1,51 @@
+.table-panel h2 {
+  margin: 0 0 0.55rem;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 400;
+}
+
+.table-scroll {
+  overflow: auto;
+  max-height: 280px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.table-panel table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.table-panel th,
+.table-panel td {
+  text-align: left;
+  padding: 0.45rem 0.55rem;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.table-panel th {
+  position: sticky;
+  top: 0;
+  background: #0b1f2a;
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.table-panel tr.ok td:last-child {
+  color: var(--accent);
+}
+
+.table-panel tr.bad td:last-child {
+  color: var(--danger);
+}
+
+.table-panel td.empty {
+  color: var(--muted);
+  font-style: italic;
+  white-space: normal;
+}

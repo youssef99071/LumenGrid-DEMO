@@ -1,0 +1,61 @@
+.feed-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.feed-panel h2 {
+  margin: 0 0 0.65rem;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 400;
+}
+
+.feed-scroll {
+  overflow-y: auto;
+  max-height: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding-right: 0.25rem;
+}
+
+.feed-item {
+  padding: 0.55rem 0.65rem;
+  border-left: 2px solid var(--line);
+  background: rgba(18, 48, 64, 0.35);
+  animation: fade-up 0.35s ease both;
+}
+
+.feed-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.feed-conf {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.feed-loc {
+  margin: 0.3rem 0 0.15rem;
+  font-size: 0.78rem;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.feed-item time {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.empty {
+  color: var(--muted);
+  font-style: italic;
+  font-size: 0.9rem;
+}

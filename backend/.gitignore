@@ -1,0 +1,12 @@
+.venv/
+.pydeps/
+.vendor/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.env
+*.db
+get-pip.py
+.mypy_cache/
+.ruff_cache/

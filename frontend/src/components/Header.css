@@ -1,0 +1,74 @@
+.dash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+  background: rgba(7, 20, 28, 0.72);
+  backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.brand-block {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.logo {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.tag {
+  margin: 0.15rem 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+.header-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.live-pill.on {
+  color: var(--accent);
+  border-color: rgba(62, 207, 142, 0.35);
+}
+
+.live-pill.off {
+  color: var(--danger);
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+
+.clock {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  color: var(--muted);
+}

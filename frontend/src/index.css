@@ -1,0 +1,112 @@
+:root {
+  --bg-deep: #07141c;
+  --bg: #0b1f2a;
+  --bg-elevated: #123040;
+  --line: rgba(94, 160, 184, 0.28);
+  --text: #e8f2f6;
+  --muted: #8aa8b5;
+  --accent: #3ecf8e;
+  --accent-dim: rgba(62, 207, 142, 0.15);
+  --warn: #f4c95f;
+  --danger: #e07a5f;
+  --info: #5b8fa8;
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+  --font-display: 'Instrument Serif', Georgia, serif;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background:
+    radial-gradient(ellipse 90% 55% at 8% -8%, rgba(62, 207, 142, 0.1), transparent 50%),
+    radial-gradient(ellipse 70% 45% at 95% 0%, rgba(91, 143, 168, 0.14), transparent 48%),
+    linear-gradient(165deg, var(--bg-deep) 0%, var(--bg) 50%, #0a2433 100%);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: var(--bg-elevated);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0.5rem 0.9rem;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: #164056;
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.primary {
+  background: linear-gradient(135deg, #2f9e6e, var(--accent));
+  border-color: transparent;
+  color: #062016;
+  font-weight: 600;
+}
+
+button.primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #37b07c, #56db9c);
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.85);
+  }
+}
+
+.leaflet-container {
+  font: inherit;
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: #0b1f2a;
+  color: #e8f2f6;
+  border: 1px solid rgba(94, 160, 184, 0.35);
+}
