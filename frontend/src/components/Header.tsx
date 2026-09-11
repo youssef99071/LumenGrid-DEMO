@@ -10,17 +10,16 @@ export function Header({ live, sandbox, clock }: HeaderProps) {
   return (
     <header className="dash-header">
       <div className="brand-block">
-        <img src="/grid.svg" alt="" width={28} height={28} />
         <div>
           <h1 className="logo">LumenGrid</h1>
-          <p className="tag">5G traffic sensing · Tunis</p>
+          <p className="tag">AI traffic detection · No cameras, just 5G</p>
         </div>
       </div>
       <div className="header-meta">
         <div className={`live-pill ${live ? 'on' : 'off'}`}>
           <span className="live-dot" />
           {live ? 'Live' : 'Offline'}
-          {sandbox ? ' · NaC sandbox' : ''}
+          {sandbox ? ' · Demo mode' : ''}
         </div>
         <time className="clock" dateTime={clock}>
           {clock}
@@ -29,3 +28,4 @@ export function Header({ live, sandbox, clock }: HeaderProps) {
     </header>
   )
 }
+

@@ -25,30 +25,27 @@ export function FinalPrediction({ result }: FinalPredictionProps) {
   if (!result) {
     return (
       <section className="final-panel empty">
-        <h2>Final prediction</h2>
-        <p>Run a 60s simulation to see the model’s verdict and explanation.</p>
+        <h2>🔍 Detection Result</h2>
+        <p>Run a detection (Step 3) to see what the AI found.</p>
       </section>
     )
   }
 
   const color = stateColor(result.prediction)
+  const label = result.prediction.replace('_', ' ')
 
   return (
     <section className="final-panel">
-      <h2>Final prediction</h2>
+      <h2>🔍 Detection Result</h2>
       <div className="final-status" style={{ borderColor: color }}>
         <span className="final-state" style={{ color }}>
-          {result.prediction.replace('_', ' ')}
+          {label}
         </span>
-        <span className="final-conf">{(result.confidence * 100).toFixed(0)}% confidence</span>
+        <span className="final-conf">{(result.confidence * 100).toFixed(0)}% confident</span>
       </div>
-      <p className="final-meta">
-        60s clip · mean match {result.match_rate}% · RSRP {result.rsrp} · RSRQ {result.rsrq}
-        {result.wander != null ? ` · wander ${result.wander}` : ''}
-        {result.jitter != null ? ` · jitter ${result.jitter}` : ''}
-        {result.scenario && result.scenario !== 'CUSTOM' ? ` · What-If ${result.scenario}` : ''}
-      </p>
       <p className="final-explain">{result.explanation}</p>
+      <p className="final-tagline">No cameras. No sensors. Just the 5G network.</p>
     </section>
   )
 }
+

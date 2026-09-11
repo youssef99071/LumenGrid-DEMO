@@ -11,19 +11,26 @@
 }
 
 .chart-block h3 {
-  margin: 0 0 0.4rem;
-  font-size: 0.85rem;
-  font-weight: 500;
+  margin: 0 0 0.2rem;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.chart-sub {
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
   color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  line-height: 1.4;
 }
 
 .chart-box {
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 0.4rem 0.35rem 0.1rem;
-  background: rgba(7, 20, 28, 0.35);
+  border-radius: 10px;
+  padding: 0.6rem 0.5rem 0.2rem;
+  background: var(--bg-card);
 }
 
 .chart-block.wide {

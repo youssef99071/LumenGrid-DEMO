@@ -16,27 +16,28 @@ export function StatsCards({
   return (
     <section className="stats-grid" aria-label="Traffic statistics">
       <article className="stat-card">
-        <p className="stat-label">Traffic health</p>
+        <p className="stat-label">🛣️ Roads Clear</p>
         <p className="stat-value">{trafficHealth.toFixed(0)}%</p>
-        <p className="stat-hint">share labeled NORMAL</p>
+        <p className="stat-hint">of monitored zones flowing normally</p>
       </article>
       <article className="stat-card">
-        <p className="stat-label">Active anchors</p>
+        <p className="stat-label">📡 Zones Monitored</p>
         <p className="stat-value">{activeAnchors}</p>
-        <p className="stat-hint">Tunis corridor sites</p>
+        <p className="stat-hint">live sensing points across Tunis</p>
       </article>
       <article className="stat-card">
-        <p className="stat-label">Model accuracy</p>
+        <p className="stat-label">🎯 AI Accuracy</p>
         <p className="stat-value">{modelAccuracy != null ? `${modelAccuracy.toFixed(0)}%` : '—'}</p>
-        <p className="stat-hint">vs ground-truth labels</p>
+        <p className="stat-hint">correctly identifies congestion</p>
       </article>
       <article className="stat-card">
-        <p className="stat-label">Latest confidence</p>
+        <p className="stat-label">✅ Confidence</p>
         <p className="stat-value">
           {latestConfidence != null ? `${(latestConfidence * 100).toFixed(0)}%` : '—'}
         </p>
-        <p className="stat-hint">most recent prediction</p>
+        <p className="stat-hint">certainty of the last detection</p>
       </article>
     </section>
   )
 }
+

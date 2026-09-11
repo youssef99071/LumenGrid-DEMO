@@ -3,10 +3,10 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.85rem 1.25rem;
+  padding: 1rem 1.5rem;
   border-bottom: 1px solid var(--line);
-  background: rgba(7, 20, 28, 0.72);
-  backdrop-filter: blur(10px);
+  background: rgba(10, 10, 20, 0.85);
+  backdrop-filter: blur(14px);
   position: sticky;
   top: 0;
   z-index: 20;
@@ -21,16 +21,23 @@
 .logo {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 1.55rem;
-  font-weight: 400;
+  font-size: 1.65rem;
+  font-weight: 700;
   line-height: 1;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #ffffff 30%, var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .tag {
-  margin: 0.15rem 0 0;
+  margin: 0.2rem 0 0;
   font-size: 0.72rem;
+  font-weight: 500;
   color: var(--muted);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .header-meta {
@@ -43,20 +50,23 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.3rem 0.7rem;
+  padding: 0.3rem 0.8rem;
   border-radius: 999px;
   border: 1px solid var(--line);
   font-size: 0.8rem;
+  font-weight: 500;
   color: var(--muted);
 }
 
 .live-pill.on {
   color: var(--accent);
-  border-color: rgba(62, 207, 142, 0.35);
+  border-color: rgba(0, 212, 255, 0.3);
+  background: rgba(0, 212, 255, 0.06);
 }
 
 .live-pill.off {
-  color: var(--danger);
+  color: var(--pink);
+  border-color: rgba(255, 45, 120, 0.3);
 }
 
 .live-dot {
@@ -70,5 +80,6 @@
 .clock {
   font-variant-numeric: tabular-nums;
   font-size: 0.85rem;
+  font-weight: 500;
   color: var(--muted);
 }

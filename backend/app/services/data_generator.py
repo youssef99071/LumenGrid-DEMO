@@ -121,6 +121,11 @@ def generate_dataset(
 
     total_samples = 0
     clip_ids: List[str] = []
+    
+    # We will collect all clips and readings in memory, then bulk save them.
+    # This turns a ~10-second SQLite bottleneck into milliseconds.
+    all_clips = []
+    all_readings = []
 
     for anchor_id, lat, lon in anchors:
         for i in range(clips_per_anchor):
@@ -136,8 +141,9 @@ def generate_dataset(
                 lon=lon,
                 duration=CLIP_LEN,
             )
+            clip_id = str(uuid.uuid4())
             clip = RecordingClip(
-                id=str(uuid.uuid4()),
+                id=clip_id,
                 anchor_id=anchor_id,
                 start_time=clip_start,
                 end_time=clip_start + timedelta(seconds=CLIP_LEN - 1),
@@ -148,11 +154,12 @@ def generate_dataset(
                 traffic_label=label.value,
                 annotation_source=source,
             )
-            db.add(clip)
+            all_clips.append(clip)
+            
             for idx, s in enumerate(samples):
-                db.add(
+                all_readings.append(
                     AnchorReading(
-                        clip_id=clip.id,
+                        clip_id=clip_id,
                         seq_index=idx,
                         timestamp=clip_start + timedelta(seconds=idx),
                         anchor_id=anchor_id,
@@ -167,8 +174,10 @@ def generate_dataset(
                     )
                 )
             total_samples += CLIP_LEN
-            clip_ids.append(clip.id)
+            clip_ids.append(clip_id)
 
+    db.bulk_save_objects(all_clips)
+    db.bulk_save_objects(all_readings)
     db.commit()
     end_time = start + timedelta(seconds=clip_stride * (clips_per_anchor - 1) + CLIP_LEN - 1)
     logger.info(
@@ -277,14 +286,14 @@ def seed_demo_dataset(db: Session, *, force: bool = False) -> dict:
     db.query(RecordingClip).delete()
     db.commit()
 
-    start = datetime.utcnow() - timedelta(days=7)
+    start = datetime.utcnow() - timedelta(days=2)
     start = start.replace(minute=0, second=0, microsecond=0)
 
     # One 60s clip every 30 minutes → manageable volume, still sequence-based
     result = generate_dataset(
         db,
         num_anchors=3,
-        duration_minutes=7 * 24 * 60,
+        duration_minutes=2 * 24 * 60,
         sample_interval_seconds=30 * 60,
         clear_existing=False,
         start_time=start,

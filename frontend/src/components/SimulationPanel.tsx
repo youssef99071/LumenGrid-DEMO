@@ -51,7 +51,7 @@ export function SimulationPanel({
   const [timeOfDay, setTimeOfDay] = useState<'morning' | 'afternoon' | 'evening' | 'night'>(
     'morning',
   )
-  const [speed, setSpeed] = useState<1 | 5 | 10>(10)
+  const [speed] = useState<1 | 5 | 10>(10)
   const [scenario, setScenario] = useState<WhatIfScenario>('TRAFFIC_JAM')
 
   useEffect(() => {
@@ -63,89 +63,91 @@ export function SimulationPanel({
 
   return (
     <section className="sim-panel">
-      <h2>Demo controls</h2>
+      <h2>🎬 Run the Demo</h2>
       <p className="sim-copy">
-        Record a 60s clip (wander/jitter), then match occupancy on the full sequence — same unit as
-        learning.
+        See how LumenGrid detects traffic using invisible 5G signals — no cameras, no sensors.
       </p>
 
-      <label className="field">
-        <span>What-If occupancy class</span>
-        <select
-          value={scenario}
-          disabled={disabled}
-          onChange={(e) => setScenario(e.target.value as WhatIfScenario)}
-        >
-          <option value="EMPTY">EMPTY</option>
-          <option value="LOW_OCCUPANCY">LOW OCCUPANCY</option>
-          <option value="NORMAL">NORMAL</option>
-          <option value="SLOW">SLOW</option>
-          <option value="TRAFFIC_JAM">TRAFFIC JAM</option>
-          <option value="CUSTOM">CUSTOM (slider)</option>
-        </select>
-        <span className="hint">{SCENARIO_HINT[scenario]}</span>
-      </label>
+      {/* Step 1 */}
+      <div className="step-block">
+        <div className="step-header">
+          <span className="step-badge">1</span>
+          <span className="step-title">Load Training Data</span>
+        </div>
+        <p className="step-desc">Feed the AI one week of historical signal data to learn from.</p>
+        <button disabled={disabled} onClick={onSeedDemo} className="step-btn">
+          {busyLabel === 'seed' ? '⏳ Loading data…' : '📥 Load Training Data'}
+        </button>
+      </div>
 
-      {custom && (
+      {/* Step 2 */}
+      <div className="step-block">
+        <div className="step-header">
+          <span className="step-badge">2</span>
+          <span className="step-title">Train the AI</span>
+        </div>
+        <p className="step-desc">The AI learns to recognize traffic patterns from the 5G signal fingerprint.</p>
+        <button disabled={disabled} onClick={onTrain} className="step-btn">
+          {busyLabel === 'train' ? '⏳ Training AI…' : '🧠 Train the AI (~2 seconds)'}
+        </button>
+      </div>
+
+      {/* Step 3 */}
+      <div className="step-block">
+        <div className="step-header">
+          <span className="step-badge">3</span>
+          <span className="step-title">Run Live Detection</span>
+        </div>
+        <p className="step-desc">Pick a traffic scenario and watch the AI detect it in real time.</p>
+
         <label className="field">
-          <span>Traffic intensity · {intensity}%</span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={intensity}
+          <span>Traffic scenario</span>
+          <select
+            value={scenario}
             disabled={disabled}
-            onChange={(e) => setIntensity(Number(e.target.value))}
-          />
-        </label>
-      )}
-
-      <label className="field">
-        <span>Location</span>
-        <select
-          value={locationId || locations[0]?.id || ''}
-          disabled={disabled}
-          onChange={(e) => setLocationId(e.target.value)}
-        >
-          {locations.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.name}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="field">
-        <span>Time of day</span>
-        <select
-          value={timeOfDay}
-          disabled={disabled}
-          onChange={(e) => setTimeOfDay(e.target.value as typeof timeOfDay)}
-        >
-          <option value="morning">Morning</option>
-          <option value="afternoon">Afternoon</option>
-          <option value="evening">Evening</option>
-          <option value="night">Night</option>
-        </select>
-      </label>
-
-      <fieldset className="speed-row" disabled={disabled}>
-        <legend>Simulation speed</legend>
-        {([1, 5, 10] as const).map((s) => (
-          <button
-            key={s}
-            type="button"
-            className={speed === s ? 'chip active' : 'chip'}
-            onClick={() => setSpeed(s)}
+            onChange={(e) => setScenario(e.target.value as WhatIfScenario)}
           >
-            {s}x
-          </button>
-        ))}
-      </fieldset>
+            <option value="EMPTY">🟢 Empty road</option>
+            <option value="LOW_OCCUPANCY">🔵 Light traffic</option>
+            <option value="NORMAL">🟡 Normal flow</option>
+            <option value="SLOW">🟠 Slow — congestion building</option>
+            <option value="TRAFFIC_JAM">🔴 Traffic jam</option>
+            <option value="CUSTOM">⚙️ Custom (use slider)</option>
+          </select>
+          <span className="hint">{SCENARIO_HINT[scenario]}</span>
+        </label>
 
-      <div className="sim-actions">
+        {custom && (
+          <label className="field">
+            <span>Traffic intensity · {intensity}%</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={intensity}
+              disabled={disabled}
+              onChange={(e) => setIntensity(Number(e.target.value))}
+            />
+          </label>
+        )}
+
+        <label className="field">
+          <span>Location</span>
+          <select
+            value={locationId || locations[0]?.id || ''}
+            disabled={disabled}
+            onChange={(e) => setLocationId(e.target.value)}
+          >
+            {locations.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <button
-          className="primary"
+          className="primary step-btn run-btn"
           disabled={disabled || !locations.length}
           onClick={() =>
             onRun({
@@ -157,22 +159,21 @@ export function SimulationPanel({
             })
           }
         >
-          {running ? 'Recording…' : 'Run simulation'}
+          {running ? '📡 Detecting… ' : '▶  Run Live Detection'}
         </button>
-        <button disabled={disabled} onClick={onTrain}>
-          {busyLabel === 'train' ? 'Training…' : 'Train model'}
+      </div>
+
+      {/* Bonus action */}
+      <div className="step-block step-block--alt">
+        <button disabled={disabled} onClick={onPredictMap} className="step-btn">
+          {busyLabel === 'map' ? '⏳ Scanning…' : '🗺️ Scan All Locations on Map'}
         </button>
-        <button disabled={disabled} onClick={onPredictMap}>
-          {busyLabel === 'map' ? 'Predicting…' : 'Predict all anchors'}
-        </button>
-        <button disabled={disabled} onClick={onSeedDemo}>
-          {busyLabel === 'seed' ? 'Seeding…' : 'Reload learning data'}
-        </button>
+        <p className="step-desc">Instantly predict traffic for every monitored zone across Tunis.</p>
       </div>
 
       <div className="progress-wrap">
         <div className="progress-label">
-          {running ? `Recording ${progress.toFixed(0)}%` : 'Idle — ready for demo'}
+          {running ? `Detecting… ${progress.toFixed(0)}%` : 'Ready — choose a step above'}
         </div>
         <div className="progress-track">
           <div className="progress-bar" style={{ width: `${running ? progress : 0}%` }} />
@@ -181,3 +182,4 @@ export function SimulationPanel({
     </section>
   )
 }
+

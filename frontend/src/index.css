@@ -1,17 +1,20 @@
 :root {
-  --bg-deep: #07141c;
-  --bg: #0b1f2a;
-  --bg-elevated: #123040;
-  --line: rgba(94, 160, 184, 0.28);
-  --text: #e8f2f6;
-  --muted: #8aa8b5;
-  --accent: #3ecf8e;
-  --accent-dim: rgba(62, 207, 142, 0.15);
+  --bg-deep: #0a0a14;
+  --bg: #0e0e1a;
+  --bg-elevated: #1a1a2e;
+  --bg-card: #16162a;
+  --line: rgba(0, 212, 255, 0.15);
+  --text: #f0f0ff;
+  --muted: #8888aa;
+  --accent: #00d4ff;
+  --accent-dim: rgba(0, 212, 255, 0.12);
+  --pink: #ff2d78;
+  --pink-dim: rgba(255, 45, 120, 0.12);
   --warn: #f4c95f;
-  --danger: #e07a5f;
-  --info: #5b8fa8;
-  --font-sans: 'DM Sans', system-ui, sans-serif;
-  --font-display: 'Instrument Serif', Georgia, serif;
+  --danger: #ff2d78;
+  --info: #00d4ff;
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
   color-scheme: dark;
 }
 
@@ -29,9 +32,9 @@ body,
 body {
   font-family: var(--font-sans);
   background:
-    radial-gradient(ellipse 90% 55% at 8% -8%, rgba(62, 207, 142, 0.1), transparent 50%),
-    radial-gradient(ellipse 70% 45% at 95% 0%, rgba(91, 143, 168, 0.14), transparent 48%),
-    linear-gradient(165deg, var(--bg-deep) 0%, var(--bg) 50%, #0a2433 100%);
+    radial-gradient(ellipse 80% 50% at 10% -10%, rgba(0, 212, 255, 0.07), transparent 50%),
+    radial-gradient(ellipse 60% 40% at 90% 5%, rgba(255, 45, 120, 0.07), transparent 45%),
+    linear-gradient(180deg, var(--bg-deep) 0%, var(--bg) 100%);
   color: var(--text);
   line-height: 1.5;
 }
@@ -49,12 +52,13 @@ button {
   color: var(--text);
   border-radius: 8px;
   padding: 0.5rem 0.9rem;
+  font-weight: 500;
   transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
 }
 
 button:hover:not(:disabled) {
   border-color: var(--accent);
-  background: #164056;
+  background: rgba(0, 212, 255, 0.08);
 }
 
 button:active:not(:disabled) {
@@ -62,20 +66,22 @@ button:active:not(:disabled) {
 }
 
 button:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 button.primary {
-  background: linear-gradient(135deg, #2f9e6e, var(--accent));
+  background: linear-gradient(135deg, #0099cc, var(--accent));
   border-color: transparent;
-  color: #062016;
-  font-weight: 600;
+  color: #000d12;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 button.primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #37b07c, #56db9c);
+  background: linear-gradient(135deg, #00b8e6, #33ddff);
 }
+
 
 @keyframes fade-up {
   from {
@@ -106,7 +112,8 @@ button.primary:hover:not(:disabled) {
 
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
-  background: #0b1f2a;
-  color: #e8f2f6;
-  border: 1px solid rgba(94, 160, 184, 0.35);
+  background: #16162a;
+  color: #f0f0ff;
+  border: 1px solid rgba(0, 212, 255, 0.25);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }

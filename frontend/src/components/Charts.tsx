@@ -45,23 +45,25 @@ export function Charts({
   return (
     <section className="charts-panel">
       <div className="chart-block">
-        <h3>Match rate · 60s window</h3>
+        <h3>📶 Live 5G Signal Disruption</h3>
+        <p className="chart-sub">Signal drops when vehicles block the radio waves between towers</p>
         <div className="chart-box">
-          <ResponsiveContainer width="100%" height={180}>
+          <ResponsiveContainer width="100%" height={200}>
             <LineChart data={matchSeries}>
-              <CartesianGrid stroke="rgba(94,160,184,0.15)" strokeDasharray="3 3" />
-              <XAxis dataKey="t" tick={{ fill: '#8aa8b5', fontSize: 11 }} unit="s" />
-              <YAxis domain={[0, 100]} tick={{ fill: '#8aa8b5', fontSize: 11 }} />
+              <CartesianGrid stroke="rgba(0,212,255,0.08)" strokeDasharray="3 3" />
+              <XAxis dataKey="t" tick={{ fill: '#8888aa', fontSize: 11 }} unit="s" />
+              <YAxis domain={[0, 100]} tick={{ fill: '#8888aa', fontSize: 11 }} />
               <Tooltip
-                contentStyle={{ background: '#0b1f2a', border: '1px solid rgba(94,160,184,0.3)' }}
+                contentStyle={{ background: '#16162a', border: '1px solid rgba(0,212,255,0.25)', borderRadius: 8 }}
               />
               <Line
                 type="monotone"
                 dataKey="match_rate"
-                stroke="#3ecf8e"
+                stroke="#00d4ff"
                 strokeWidth={2}
                 dot={false}
                 isAnimationActive={false}
+                name="Signal strength"
               />
             </LineChart>
           </ResponsiveContainer>
@@ -69,17 +71,18 @@ export function Charts({
       </div>
 
       <div className="chart-block">
-        <h3>Confidence bars</h3>
+        <h3>🎯 AI Certainty — What's happening?</h3>
+        <p className="chart-sub">How confident the AI is in each traffic state right now</p>
         <div className="chart-box">
-          <ResponsiveContainer width="100%" height={180}>
+          <ResponsiveContainer width="100%" height={200}>
             <BarChart data={confData}>
-              <CartesianGrid stroke="rgba(94,160,184,0.15)" strokeDasharray="3 3" />
-              <XAxis dataKey="name" tick={{ fill: '#8aa8b5', fontSize: 11 }} />
-              <YAxis domain={[0, 100]} tick={{ fill: '#8aa8b5', fontSize: 11 }} />
+              <CartesianGrid stroke="rgba(0,212,255,0.08)" strokeDasharray="3 3" />
+              <XAxis dataKey="name" tick={{ fill: '#8888aa', fontSize: 11 }} />
+              <YAxis domain={[0, 100]} tick={{ fill: '#8888aa', fontSize: 11 }} />
               <Tooltip
-                contentStyle={{ background: '#0b1f2a', border: '1px solid rgba(94,160,184,0.3)' }}
+                contentStyle={{ background: '#16162a', border: '1px solid rgba(0,212,255,0.25)', borderRadius: 8 }}
               />
-              <Bar dataKey="value" fill="#5b8fa8" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="value" fill="#ff2d78" radius={[4, 4, 0, 0]} name="Confidence %" />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -88,35 +91,40 @@ export function Charts({
       <div className="chart-block wide">
         <h3>
           {hasComparison
-            ? 'What-If comparison · NORMAL vs TRAFFIC_JAM match rates'
-            : 'Historical accuracy'}
+            ? '📊 Scenario Comparison — Clear road vs. Traffic jam'
+            : '📈 AI Track Record — Detection Accuracy Over Time'}
         </h3>
+        <p className="chart-sub">
+          {hasComparison
+            ? 'How the 5G signal pattern differs across traffic scenarios'
+            : 'How accurately the AI has been detecting traffic states'}
+        </p>
         <div className="chart-box">
-          <ResponsiveContainer width="100%" height={180}>
+          <ResponsiveContainer width="100%" height={200}>
             {hasComparison ? (
               <LineChart data={comparison}>
-                <CartesianGrid stroke="rgba(94,160,184,0.15)" strokeDasharray="3 3" />
-                <XAxis dataKey="t" tick={{ fill: '#8aa8b5', fontSize: 11 }} unit="s" />
-                <YAxis domain={[0, 100]} tick={{ fill: '#8aa8b5', fontSize: 11 }} />
+                <CartesianGrid stroke="rgba(0,212,255,0.08)" strokeDasharray="3 3" />
+                <XAxis dataKey="t" tick={{ fill: '#8888aa', fontSize: 11 }} unit="s" />
+                <YAxis domain={[0, 100]} tick={{ fill: '#8888aa', fontSize: 11 }} />
                 <Tooltip
-                  contentStyle={{ background: '#0b1f2a', border: '1px solid rgba(94,160,184,0.3)' }}
+                  contentStyle={{ background: '#16162a', border: '1px solid rgba(0,212,255,0.25)', borderRadius: 8 }}
                 />
                 <Legend />
                 <Line
                   type="monotone"
                   dataKey="NORMAL"
-                  stroke="#3ecf8e"
+                  stroke="#00d4ff"
                   strokeWidth={2}
                   dot={false}
-                  name="NORMAL"
+                  name="Normal flow"
                 />
                 <Line
                   type="monotone"
                   dataKey="TRAFFIC_JAM"
-                  stroke="#e07a5f"
+                  stroke="#ff2d78"
                   strokeWidth={2}
                   dot={false}
-                  name="TRAFFIC_JAM"
+                  name="Traffic jam"
                 />
                 {comparison.some((p) => p.current != null) && (
                   <Line
@@ -132,13 +140,13 @@ export function Charts({
               </LineChart>
             ) : (
               <LineChart data={accuracyHistory}>
-                <CartesianGrid stroke="rgba(94,160,184,0.15)" strokeDasharray="3 3" />
-                <XAxis dataKey="label" tick={{ fill: '#8aa8b5', fontSize: 11 }} />
-                <YAxis domain={[0, 100]} tick={{ fill: '#8aa8b5', fontSize: 11 }} />
+                <CartesianGrid stroke="rgba(0,212,255,0.08)" strokeDasharray="3 3" />
+                <XAxis dataKey="label" tick={{ fill: '#8888aa', fontSize: 11 }} />
+                <YAxis domain={[0, 100]} tick={{ fill: '#8888aa', fontSize: 11 }} />
                 <Tooltip
-                  contentStyle={{ background: '#0b1f2a', border: '1px solid rgba(94,160,184,0.3)' }}
+                  contentStyle={{ background: '#16162a', border: '1px solid rgba(0,212,255,0.25)', borderRadius: 8 }}
                 />
-                <Line type="monotone" dataKey="accuracy" stroke="#f4c95f" strokeWidth={2} dot />
+                <Line type="monotone" dataKey="accuracy" stroke="#00d4ff" strokeWidth={2} dot />
               </LineChart>
             )}
           </ResponsiveContainer>
@@ -147,3 +155,4 @@ export function Charts({
     </section>
   )
 }
+

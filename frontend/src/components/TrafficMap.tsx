@@ -127,10 +127,10 @@ export function TrafficMap({ markers, selectedId, onSelect }: TrafficMapProps) {
     <section className="map-panel">
       <div className="map-head">
         <div>
-          <h2>Traffic map</h2>
+          <h2>Live Traffic Intelligence</h2>
           <p>
-            LumenGrid anchors on the Ooredoo Tunisia radio grid (MCC 605 / MNC 03)
-            {towerMeta.count ? ` · ${towerMeta.count.toLocaleString()} cells` : ''}.
+            Real-time AI monitoring across Greater Tunis — powered by 5G signal analysis
+            {towerMeta.count ? ` · ${towerMeta.count.toLocaleString()} cell towers in range` : ''}
           </p>
         </div>
         <label className="tower-toggle">
@@ -139,7 +139,7 @@ export function TrafficMap({ markers, selectedId, onSelect }: TrafficMapProps) {
             checked={showTowers}
             onChange={(e) => setShowTowers(e.target.checked)}
           />
-          Show Ooredoo towers
+          Show 5G cell network
         </label>
       </div>
       <div className="map-frame">
@@ -152,7 +152,7 @@ export function TrafficMap({ markers, selectedId, onSelect }: TrafficMapProps) {
         >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <FitTunis markers={markers} />
           <OoredooTowerLayer towers={towers} visible={showTowers} />
@@ -170,13 +170,13 @@ export function TrafficMap({ markers, selectedId, onSelect }: TrafficMapProps) {
                 <br />
                 {m.district}
                 <br />
-                State: {m.prediction.replace('_', ' ')}
+                Status: <strong>{m.prediction.replace('_', ' ')}</strong>
                 <br />
-                Confidence: {(m.confidence * 100).toFixed(0)}%
+                AI confidence: {(m.confidence * 100).toFixed(0)}%
                 {m.match_rate != null && (
                   <>
                     <br />
-                    Match rate: {m.match_rate}%
+                    Signal strength: {m.match_rate}%
                   </>
                 )}
               </Popup>
@@ -185,22 +185,22 @@ export function TrafficMap({ markers, selectedId, onSelect }: TrafficMapProps) {
         </MapContainer>
         <aside className="map-legend" aria-label="Legend">
           <div>
-            <span className="swatch" style={{ background: '#5b8fa8' }} /> Ooredoo (605/03)
+            <span className="swatch" style={{ background: '#5b8fa8' }} /> 5G cell towers
           </div>
           <div>
-            <span className="swatch" style={{ background: '#7dd3c0' }} /> EMPTY
+            <span className="swatch" style={{ background: '#7dd3c0' }} /> Empty
           </div>
           <div>
-            <span className="swatch" style={{ background: '#5bb89a' }} /> LOW OCCUPANCY
+            <span className="swatch" style={{ background: '#5bb89a' }} /> Light traffic
           </div>
           <div>
-            <span className="swatch" style={{ background: '#3ecf8e' }} /> NORMAL
+            <span className="swatch" style={{ background: '#3ecf8e' }} /> Normal flow
           </div>
           <div>
-            <span className="swatch" style={{ background: '#f4c95f' }} /> SLOW
+            <span className="swatch" style={{ background: '#f4c95f' }} /> Slow
           </div>
           <div>
-            <span className="swatch" style={{ background: '#e07a5f' }} /> TRAFFIC JAM
+            <span className="swatch" style={{ background: '#e07a5f' }} /> Traffic jam
           </div>
         </aside>
       </div>
@@ -211,10 +211,11 @@ export function TrafficMap({ markers, selectedId, onSelect }: TrafficMapProps) {
           <p>
             {selected.prediction.replace('_', ' ')} · {(selected.confidence * 100).toFixed(0)}%
             confidence
-            {selected.match_rate != null ? ` · match ${selected.match_rate}%` : ''}
+            {selected.match_rate != null ? ` · signal ${selected.match_rate}%` : ''}
           </p>
         </div>
       )}
     </section>
   )
 }
+
