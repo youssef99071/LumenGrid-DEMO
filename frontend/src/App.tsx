@@ -6,21 +6,16 @@ import {
   type LocationDef,
   type MapMarker,
   type MatchRatePoint,
-  type RecordingRow,
   type TrafficPrediction,
   type WsMessage,
 } from './api'
 import { Charts, type ComparisonPoint } from './components/Charts'
 import { DataLoadPanel } from './components/DataLoadPanel'
-import { DataTable } from './components/DataTable'
 import { FinalPrediction, type FinalPredictionData } from './components/FinalPrediction'
 import { Header, type AppTab } from './components/Header'
-import { LearningPanel } from './components/LearningPanel'
 import { PredictionFeed } from './components/PredictionFeed'
-import { SamplePredict } from './components/SamplePredict'
 import { SimulationPanel } from './components/SimulationPanel'
 import { StatsCards } from './components/StatsCards'
-import { ClassZoneMap, readCachedZones, type ClassZone } from './components/ClassZoneMap'
 import { TrafficMap } from './components/TrafficMap'
 import { usePredictionSocket } from './hooks/usePredictionSocket'
 import './App.css'
@@ -131,10 +126,8 @@ export default function App() {
     SLOW: 0.33,
     TRAFFIC_JAM: 0.33,
   })
-  const [recording, setRecording] = useState<RecordingRow[]>([])
   const [finalResult, setFinalResult] = useState<FinalPredictionData | null>(null)
   const [lastClipId, setLastClipId] = useState<string | null>(null)
-  const [classZones, setClassZones] = useState<ClassZone[]>(() => readCachedZones())
   const [tab, setTab] = useState<AppTab>('data')
   const [accuracyHistory, setAccuracyHistory] = useState<{ label: string; accuracy: number }[]>([
     { label: 't-4', accuracy: 88 },
@@ -205,7 +198,6 @@ export default function App() {
         setProgress(0)
         setMatchSeries([])
         liveSeries.current = []
-        setRecording([])
         setFinalResult(null)
         setLastClipId(msg.clip_id ?? null)
         setSelectedId(msg.location_id)
@@ -238,21 +230,6 @@ export default function App() {
         setComparison((prev) => mergeComparison(prev, liveSeries.current, 'current'))
         // Update confidence bars live from the current signal level
         setProbabilities(probsFromMatchRate(msg.match_rate))
-        setRecording((prev) =>
-          [
-            {
-              timestamp: msg.timestamp,
-              match_rate: msg.match_rate,
-              rsrp: msg.rsrp,
-              rsrq: msg.rsrq,
-              actual_traffic: msg.actual_traffic,
-              predicted_traffic: '—',
-              correct: false,
-              confidence: 0,
-            },
-            ...prev,
-          ].slice(0, 60),
-        )
       }
     },
     [refresh],
@@ -317,7 +294,7 @@ export default function App() {
                   totalZones={stats?.active_anchors ?? 0}
                   onLoad={() =>
                     runAction('seed', async () => {
-                      await api.seedDemo(true, classZones)
+                      await api.seedDemo(true)
                     })
                   }
                 />

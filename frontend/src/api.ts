@@ -232,13 +232,7 @@ export const api = {
         ...body,
       }),
     }),
-  seedDemo: (force = true, zones?: Array<{
-    id: string
-    latitude: number
-    longitude: number
-    label: TrafficState
-    radius_m: number
-  }>) =>
+  seedDemo: (force = true) =>
     request<{
       seeded: boolean
       readings_created?: number
@@ -246,7 +240,7 @@ export const api = {
       model_accuracy?: number
     }>(`/api/dataset/seed-demo?force=${force}`, {
       method: 'POST',
-      body: JSON.stringify({ zones: zones ?? [] }),
+      body: JSON.stringify({ zones: [] }),
     }),
   trainModel: () =>
     request<{ trained: boolean; accuracy: number; model_version: string; n_readings: number }>(
