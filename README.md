@@ -1,83 +1,85 @@
 # LumenGrid
 
-Proof-of-concept: **5G signal scatter → road occupancy**, using Nokia NaC / CAMARA + cell radio metrics, labeled like Google Maps traffic, with a trained classifier.
+> **AI-powered road traffic detection — no cameras, no roadside sensors. Just the 5G network.**
 
-## Idea rating (feasibility)
+LumenGrid is a proof-of-concept platform that detects road congestion by analyzing how physical vehicles disrupt 5G radio signals between cell towers. It uses Nokia Network as Code (NaC) / CAMARA cellular metrics (signal strength, match rate, neighbour count) to classify road occupancy in real time using a trained AI model.
 
-| Step | Verdict |
-|------|---------|
-| 1. Learning (anchor features + Maps/user labels) | **Feasible** for PoC — CAMARA `match_rate` + RSRP/RSRQ as density proxies is a credible sensing story; real Maps APIs can replace synthetic labels later |
-| 2. Train AI model | **Feasible** — supervised RF/GBM on those features; PoC uses RandomForest (~99% on synthetic separable bands) |
-| 3. Sample request (partial modalities) | **Feasible** — impute missing GPS or cellinfo; expect lower confidence when sensors are missing |
-| 4. Per-anchor map occupancy | **Feasible** — batch predict latest sample per anchor |
+---
 
-**Caveat:** Real-world accuracy needs calibration per site, weather, and network config. The PoC proves the *pipeline*; production would use live NaC + Maps Ground Truth.
+## 🚦 The Concept
 
-## Occupancy classes
+When cars fill a road, they physically block and scatter 5G signals between towers. LumenGrid reads this invisible disruption — analyzed over a 60-second window of signal data — and classifies traffic into five states:
 
 `EMPTY` → `LOW_OCCUPANCY` → `NORMAL` → `SLOW` → `TRAFFIC_JAM`
 
-## Tunis tower layer (OpenCelliD)
+**No cameras. No sensors. Just the network that already exists.**
 
-The map loads **real OpenCelliD** Ooredoo cells for Greater Tunis (MCC 605 / MNC 03) via tiled `getInArea` (full history, not the 18-month country dump). The API allows ~1000 calls/day and boxes of at most 4 km²; the script resumes if you run it again after the daily reset.
+---
 
-```bash
-cd backend
-# OPENCELLID_API_KEY in .env
-PYTHONPATH=.vendor python3 scripts/download_ooredoo_towers.py
-# → data/ooredoo_towers.csv
-curl -X POST http://localhost:8000/api/towers/reload
-```
+## 🚀 Quick Start
 
-Toggle **Show Ooredoo towers** on the map. Data © [OpenCelliD](https://opencellid.org/) (CC BY-SA 4.0).
+### Requirements
+- Python 3.9+
+- Node.js 18+
+- `python3-venv` (on Debian/Ubuntu: `sudo apt install python3-venv -y`)
 
-Both training and inference operate on **60s sequences** (1 Hz), not single snapshots:
-
-- Per-channel features: mean / std / min / max / **wander** (range) / **jitter** (std of Δ) / slope  
-- GPS wander/jitter when modality includes location  
-- Simulation records a clip live, then runs **one clip-level match** at the end  
+### Run everything with one command
 
 ```bash
-# Synthesize + match a 60s TRAFFIC_JAM clip
-curl -X POST http://localhost:8000/api/ml/predict \
-  -H 'Content-Type: application/json' \
-  -d '{"modality":"full","scenario":"TRAFFIC_JAM"}'
+chmod +x run.sh
+./run.sh
 ```
 
-## Quick start
+This script automatically:
+1. Creates a Python virtual environment and installs all backend dependencies
+2. Copies `.env.example` → `.env` if no `.env` exists
+3. Generates the 5G tower map data (avoiding sea coordinates)
+4. Installs frontend npm packages
+5. Starts both the backend and frontend servers
 
-```bash
-# Backend
-cd backend
-PYTHONPATH=.vendor ./run.sh   # or venv + uvicorn app.main:app --reload --port 8000
+| URL | Purpose |
+|-----|---------|
+| `http://localhost:5173` | **Dashboard UI (The Demo)** |
+| `http://localhost:8000/docs` | API docs (Swagger) |
 
-# Frontend
-cd frontend && npm install && npm run dev
-```
+Press `Ctrl+C` to stop everything.
 
-UI: http://localhost:5173 · API docs: http://localhost:8000/docs
+---
 
-## Docker
+## 🎬 How to Run the Demo
 
-Frontend and backend run together. Nginx serves the UI and proxies `/api` and `/ws` to FastAPI.
+The UI is built as a linear 3-step story to present to stakeholders:
 
-```bash
-git checkout V2
-# optional: copy keys into a root .env (NAC_RAPIDAPI_KEY, OPENCELLID_API_KEY, …)
-docker compose up -d --build
-```
+### 1. The Data Tab
+* **Action:** Click **"📥 Load Training Data"**.
+* **What it does:** Feeds the AI 7 days of historical 5G signal data across 10 monitoring zones along Avenue Habib Bourguiba in Tunis. This teaches it what each traffic state looks like in radio waves.
 
-App: http://localhost:8083 · API docs: http://localhost:8083/docs
+### 2. The Learning Tab
+* **Action:** Click **"🎓 Train the AI"**.
+* **What it does:** Trains the Random Forest classifier on the data you just loaded in a matter of seconds.
 
-SQLite and trained models persist in Docker volumes (`lumengrid-db`, `lumengrid-artifacts`).
+### 3. The Simulation Tab (God Mode)
+* **Action 1:** Under **Simulate a Traffic Scenario**, pick a traffic state (e.g. 🔴 Traffic jam), pick a location, and click **"📡 Generate 5G Signal Clip"**.
+* **Action 2:** Under **Step 3 — Run Live Detection**, click **"▶ Run Live Detection"**.
+* **What it does:** First, it generates the exact physical 5G radio disruption that scenario would cause. Second, it passes that raw radio data to the AI. The AI then correctly identifies the traffic state with high confidence, purely from the signal patterns.
 
-## Key APIs
+*(Tip: You can reset the entire demo by simply going back to the Data tab and clicking "Load Training Data" again, or by deleting `backend/lumengrid.db` and restarting `./run.sh`).*
 
-| Endpoint | Role |
-|----------|------|
-| `POST /api/dataset/seed-demo` | Learning-phase data (7 days) |
-| `POST /api/ml/train` | Train RandomForest |
-| `POST /api/ml/predict` | One-shot sample (choose modality) |
-| `POST /api/ml/predict-anchors` | Occupancy for every map anchor |
-| `POST /api/simulation/run` | 60s What-If stream over `/ws` |
-| `GET /api/nac/*` | Nokia NaC / CAMARA sandbox |
+---
+
+## 🛠 Tech Stack
+
+| Layer | Stack |
+|-------|-------|
+| **Backend** | Python · FastAPI · SQLAlchemy · scikit-learn |
+| **Frontend** | React 18 · TypeScript · Vite · Leaflet · Recharts |
+| **ML Model** | Random Forest (60-second clip features: mean / std / wander / jitter / slope) |
+| **Map Data** | Synthetic Ooredoo Tunisia (MCC 605 / MNC 03) tower grid |
+
+---
+
+## ⚙️ Notes & Configuration
+
+- **Accuracy**: The PoC uses simulated synthetic data based on real-world physics principles. True real-world accuracy requires calibration per site, weather, and specific network topology configurations.
+- **Tower data**: The map shows ~45k synthetic Ooredoo cell towers generated dynamically within a Tunisia land-boundary polygon. For production, replace `backend/data/ooredoo_towers.json` with a real OpenCelliD CSV export.
+- **NaC credentials**: Add your Nokia NaC API keys to `backend/.env` to switch from sandbox mode to live production data.
