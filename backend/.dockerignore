@@ -1,0 +1,17 @@
+.venv
+.vendor
+.pydeps
+__pycache__
+*.py[cod]
+*.db
+.env
+artifacts
+.pytest_cache
+.mypy_cache
+.ruff_cache
+get-pip.py
+*.egg-info
+scripts/__pycache__
+data/_ocid_raw_*.bin
+data/_ocid_tunis_progress.txt
+data/*.gz

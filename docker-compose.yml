@@ -1,0 +1,46 @@
+name: lumengrid-v2
+
+# Build and run the V2 branch (git checkout V2).
+# UI: http://<host>:8083
+services:
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      APP_NAME: LumenGrid
+      APP_ENV: production
+      DEBUG: "false"
+      SANDBOX_MODE: ${SANDBOX_MODE:-true}
+      DATABASE_URL: sqlite:////data/lumengrid.db
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8083}
+      NAC_API_URL: ${NAC_API_URL:-https://network-as-code.p-eu.rapidapi.com}
+      NAC_CLIENT_ID: ${NAC_CLIENT_ID:-}
+      NAC_CLIENT_SECRET: ${NAC_CLIENT_SECRET:-}
+      NAC_RAPIDAPI_KEY: ${NAC_RAPIDAPI_KEY:-}
+      OPENCELLID_API_KEY: ${OPENCELLID_API_KEY:-}
+    volumes:
+      - lumengrid-db:/data
+      - lumengrid-artifacts:/app/artifacts
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    ports:
+      - "8083:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  lumengrid-db:
+  lumengrid-artifacts:

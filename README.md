@@ -57,6 +57,20 @@ cd frontend && npm install && npm run dev
 
 UI: http://localhost:5173 · API docs: http://localhost:8000/docs
 
+## Docker
+
+Frontend and backend run together. Nginx serves the UI and proxies `/api` and `/ws` to FastAPI.
+
+```bash
+git checkout V2
+# optional: copy keys into a root .env (NAC_RAPIDAPI_KEY, OPENCELLID_API_KEY, …)
+docker compose up -d --build
+```
+
+App: http://localhost:8083 · API docs: http://localhost:8083/docs
+
+SQLite and trained models persist in Docker volumes (`lumengrid-db`, `lumengrid-artifacts`).
+
 ## Key APIs
 
 | Endpoint | Role |
