@@ -2,11 +2,11 @@ import type { TrafficPrediction } from '../api'
 import './PredictionFeed.css'
 
 function tagClass(state: string) {
-  if (state === 'TRAFFIC_JAM') return 'tag jam'
-  if (state === 'SLOW') return 'tag slow'
-  if (state === 'EMPTY') return 'tag empty'
-  if (state === 'LOW_OCCUPANCY') return 'tag low'
-  return 'tag normal'
+  if (state === 'TRAFFIC_JAM') return 'feed-tag jam'
+  if (state === 'SLOW') return 'feed-tag slow'
+  if (state === 'EMPTY') return 'feed-tag empty'
+  if (state === 'LOW_OCCUPANCY') return 'feed-tag low'
+  return 'feed-tag normal'
 }
 
 interface PredictionFeedProps {

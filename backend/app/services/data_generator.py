@@ -6,7 +6,7 @@ import logging
 import random
 import uuid
 from datetime import datetime, timedelta
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
@@ -77,12 +77,13 @@ def _annotation_source(rng: random.Random) -> str:
 def generate_dataset(
     db: Session,
     *,
-    num_anchors: int = 3,
+    num_anchors: int = 10,
     duration_minutes: int = 60,
     sample_interval_seconds: int = 60,
     clear_existing: bool = True,
     start_time: Optional[datetime] = None,
     seed: int = 42,
+    zones: Optional[List[dict]] = None,
 ) -> dict:
     """Generate labeled 60s clips (one clip every ``sample_interval_seconds``).
 
@@ -98,17 +99,27 @@ def generate_dataset(
         db.commit()
         logger.info("Cleared existing clips and readings")
 
-    anchors = DEFAULT_ANCHORS[:num_anchors]
-    while len(anchors) < num_anchors:
-        idx = len(anchors) + 1
-        base_lat, base_lon = DEFAULT_ANCHORS[0][1], DEFAULT_ANCHORS[0][2]
-        anchors.append(
-            (
-                f"ANCHOR-X{idx}",
-                base_lat + rng.uniform(-0.01, 0.01),
-                base_lon + rng.uniform(-0.01, 0.01),
+    forced_labels: Dict[str, TrafficLabel] = {}
+    if zones:
+        anchors = []
+        for i, zone in enumerate(zones):
+            raw = zone.get("label", TrafficLabel.NORMAL)
+            label = raw if isinstance(raw, TrafficLabel) else TrafficLabel[str(raw)]
+            aid = str(zone.get("id") or f"ZONE-{label.value}-{i + 1}")
+            anchors.append((aid, float(zone["latitude"]), float(zone["longitude"])))
+            forced_labels[aid] = label
+    else:
+        anchors = DEFAULT_ANCHORS[:num_anchors]
+        while len(anchors) < num_anchors:
+            idx = len(anchors) + 1
+            base_lat, base_lon = DEFAULT_ANCHORS[0][1], DEFAULT_ANCHORS[0][2]
+            anchors.append(
+                (
+                    f"ANCHOR-X{idx}",
+                    base_lat + rng.uniform(-0.01, 0.01),
+                    base_lon + rng.uniform(-0.01, 0.01),
+                )
             )
-        )
 
     start = start_time or datetime.utcnow().replace(
         hour=6, minute=0, second=0, microsecond=0
@@ -121,17 +132,12 @@ def generate_dataset(
 
     total_samples = 0
     clip_ids: List[str] = []
-    
-    # We will collect all clips and readings in memory, then bulk save them.
-    # This turns a ~10-second SQLite bottleneck into milliseconds.
-    all_clips = []
-    all_readings = []
 
     for anchor_id, lat, lon in anchors:
         for i in range(clips_per_anchor):
             clip_start = start + timedelta(seconds=clip_stride * i)
             minute_of_day = clip_start.hour * 60 + clip_start.minute
-            label = _traffic_profile(minute_of_day, rng)
+            label = forced_labels.get(anchor_id) or _traffic_profile(minute_of_day, rng)
             source = _annotation_source(rng)
             samples = synthesize_clip_samples(
                 label_metrics_fn=_metrics_for_label,
@@ -141,9 +147,8 @@ def generate_dataset(
                 lon=lon,
                 duration=CLIP_LEN,
             )
-            clip_id = str(uuid.uuid4())
             clip = RecordingClip(
-                id=clip_id,
+                id=str(uuid.uuid4()),
                 anchor_id=anchor_id,
                 start_time=clip_start,
                 end_time=clip_start + timedelta(seconds=CLIP_LEN - 1),
@@ -154,12 +159,11 @@ def generate_dataset(
                 traffic_label=label.value,
                 annotation_source=source,
             )
-            all_clips.append(clip)
-            
+            db.add(clip)
             for idx, s in enumerate(samples):
-                all_readings.append(
+                db.add(
                     AnchorReading(
-                        clip_id=clip_id,
+                        clip_id=clip.id,
                         seq_index=idx,
                         timestamp=clip_start + timedelta(seconds=idx),
                         anchor_id=anchor_id,
@@ -174,10 +178,8 @@ def generate_dataset(
                     )
                 )
             total_samples += CLIP_LEN
-            clip_ids.append(clip_id)
+            clip_ids.append(clip.id)
 
-    db.bulk_save_objects(all_clips)
-    db.bulk_save_objects(all_readings)
     db.commit()
     end_time = start + timedelta(seconds=clip_stride * (clips_per_anchor - 1) + CLIP_LEN - 1)
     logger.info(
@@ -260,25 +262,24 @@ def explain_prediction(
     )
 
 
-def seed_demo_dataset(db: Session, *, force: bool = False) -> dict:
-    """Pre-load ~7 days of 60s clips for 3 Tunis anchors, then train clip model."""
+def seed_demo_dataset(
+    db: Session,
+    *,
+    force: bool = False,
+    zones: Optional[List[dict]] = None,
+) -> dict:
+    """Generate labeled 60s clips only — training and prediction are separate steps."""
     from app.db.session import init_db
-    from app.services.ml_model import predict_clip, train_occupancy_model
 
     init_db()
 
     existing = db.query(func.count(RecordingClip.id)).scalar() or 0
-    if existing > 0 and not force:
-        try:
-            train_result = train_occupancy_model(db)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Model train on existing clips failed: %s", exc)
-            train_result = {"trained": False, "error": str(exc)}
+    existing_anchors = db.query(func.count(func.distinct(RecordingClip.anchor_id))).scalar() or 0
+    if existing > 0 and not force and existing_anchors >= len(TUNIS_LOCATIONS) and not zones:
         return {
             "seeded": False,
             "reason": "data already present",
             "clips": existing,
-            "model": train_result,
         }
 
     db.query(TrafficPrediction).delete()
@@ -286,61 +287,26 @@ def seed_demo_dataset(db: Session, *, force: bool = False) -> dict:
     db.query(RecordingClip).delete()
     db.commit()
 
-    start = datetime.utcnow() - timedelta(days=2)
+    start = datetime.utcnow() - timedelta(days=7)
     start = start.replace(minute=0, second=0, microsecond=0)
 
     # One 60s clip every 30 minutes → manageable volume, still sequence-based
     result = generate_dataset(
         db,
-        num_anchors=3,
-        duration_minutes=2 * 24 * 60,
+        num_anchors=len(TUNIS_LOCATIONS),
+        duration_minutes=7 * 24 * 60,
         sample_interval_seconds=30 * 60,
         clear_existing=False,
         start_time=start,
         seed=20260829,
+        zones=zones,
     )
-
-    train_result = train_occupancy_model(db)
-
-    clips = (
-        db.query(RecordingClip)
-        .options(joinedload(RecordingClip.samples))
-        .order_by(RecordingClip.start_time.asc())
-        .all()
-    )
-    preds: List[TrafficPrediction] = []
-    correct = 0
-    for clip in clips:
-        samples = samples_from_readings(clip.samples)
-        state, confidence, _ = predict_clip(samples, modality="full")
-        if state == clip.traffic_label:
-            correct += 1
-        preds.append(
-            TrafficPrediction(
-                timestamp=clip.end_time,
-                location_id=clip.anchor_id,
-                predicted_state=state,
-                confidence=confidence,
-                model_version=train_result.get("model_version", MODEL_VERSION),
-            )
-        )
-    db.bulk_save_objects(preds)
-    db.commit()
-    accuracy = (correct / len(clips) * 100) if clips else 0.0
-    logger.info(
-        "Demo seed: %s clips, accuracy=%.1f%%, model=%s",
-        result.get("clips_created"),
-        accuracy,
-        train_result.get("model_version"),
-    )
+    logger.info("Generated %s labeled clips (no train / no predict)", result.get("clips_created"))
     return {
         "seeded": True,
         "readings_created": result["readings_created"],
         "clips_created": result.get("clips_created"),
-        "predictions_created": len(preds),
         "anchors": result["anchors"],
-        "model_accuracy": round(accuracy, 1),
-        "train": train_result,
         "clip_duration_seconds": CLIP_LEN,
         "start_time": result["start_time"],
         "end_time": result["end_time"],

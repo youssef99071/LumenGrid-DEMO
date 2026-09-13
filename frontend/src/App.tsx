@@ -1,23 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   api,
+  readCachedLocations,
   type DashboardStats,
   type LocationDef,
   type MapMarker,
   type MatchRatePoint,
-  type PredictionUpdate,
   type RecordingRow,
   type TrafficPrediction,
   type WsMessage,
 } from './api'
 import { Charts, type ComparisonPoint } from './components/Charts'
+import { DataLoadPanel } from './components/DataLoadPanel'
 import { DataTable } from './components/DataTable'
 import { FinalPrediction, type FinalPredictionData } from './components/FinalPrediction'
-import { Header } from './components/Header'
+import { Header, type AppTab } from './components/Header'
+import { LearningPanel } from './components/LearningPanel'
 import { PredictionFeed } from './components/PredictionFeed'
 import { SamplePredict } from './components/SamplePredict'
 import { SimulationPanel } from './components/SimulationPanel'
 import { StatsCards } from './components/StatsCards'
+import { ClassZoneMap, readCachedZones, type ClassZone } from './components/ClassZoneMap'
 import { TrafficMap } from './components/TrafficMap'
 import { usePredictionSocket } from './hooks/usePredictionSocket'
 import './App.css'
@@ -29,6 +32,44 @@ function formatClock(d: Date) {
     minute: '2-digit',
     second: '2-digit',
   })
+}
+
+function markersFromLocations(locs: LocationDef[]): MapMarker[] {
+  return locs.map((loc) => ({
+    location_id: loc.id,
+    name: loc.name,
+    district: loc.district,
+    latitude: loc.latitude,
+    longitude: loc.longitude,
+    prediction: 'NORMAL',
+    confidence: 0,
+    match_rate: null,
+    updated_at: null,
+  }))
+}
+
+function mergeLiveMarkers(base: MapMarker[], live: MapMarker[]): MapMarker[] {
+  if (!live.length) return base
+  if (!base.length) return live
+  const liveById = new Map(live.map((m) => [m.location_id, m]))
+  const seen = new Set<string>()
+  const merged = base.map((pin) => {
+    seen.add(pin.location_id)
+    const next = liveById.get(pin.location_id)
+    if (!next) return pin
+    return {
+      ...next,
+      location_id: pin.location_id,
+      name: pin.name,
+      district: pin.district,
+      latitude: pin.latitude,
+      longitude: pin.longitude,
+    }
+  })
+  for (const next of live) {
+    if (!seen.has(next.location_id)) merged.push(next)
+  }
+  return merged
 }
 
 function mergeComparison(
@@ -46,13 +87,38 @@ function mergeComparison(
   return Array.from(byT.values()).sort((a, b) => a.t - b.t)
 }
 
+/**
+ * Derive a realistic probability distribution from a live match_rate reading.
+ * Keeps the confidence bar chart live during simulation without a separate predict call.
+ * Bands mirror the backend _metrics_for_label() ranges.
+ */
+function probsFromMatchRate(mr: number): Record<string, number> {
+  const centres: Record<string, number> = {
+    EMPTY: 94.5,
+    LOW_OCCUPANCY: 86,
+    NORMAL: 75,
+    SLOW: 60,
+    TRAFFIC_JAM: 45,
+  }
+  const rawScores: Record<string, number> = {}
+  for (const [k, c] of Object.entries(centres)) {
+    rawScores[k] = Math.exp(-Math.abs(mr - c) / 8)
+  }
+  const total = Object.values(rawScores).reduce((s, v) => s + v, 0)
+  const result: Record<string, number> = {}
+  for (const [k, v] of Object.entries(rawScores)) {
+    result[k] = v / total
+  }
+  return result
+}
+
 export default function App() {
   const [clock, setClock] = useState(() => formatClock(new Date()))
   const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [locations, setLocations] = useState<LocationDef[]>([])
-  const [markers, setMarkers] = useState<MapMarker[]>([])
+  const [locations, setLocations] = useState<LocationDef[]>(() => readCachedLocations())
+  const [markers, setMarkers] = useState<MapMarker[]>(() => markersFromLocations(readCachedLocations()))
   const [predictions, setPredictions] = useState<TrafficPrediction[]>([])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(() => readCachedLocations()[0]?.id ?? null)
   const [sandbox, setSandbox] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -67,6 +133,9 @@ export default function App() {
   })
   const [recording, setRecording] = useState<RecordingRow[]>([])
   const [finalResult, setFinalResult] = useState<FinalPredictionData | null>(null)
+  const [lastClipId, setLastClipId] = useState<string | null>(null)
+  const [classZones, setClassZones] = useState<ClassZone[]>(() => readCachedZones())
+  const [tab, setTab] = useState<AppTab>('data')
   const [accuracyHistory, setAccuracyHistory] = useState<{ label: string; accuracy: number }[]>([
     { label: 't-4', accuracy: 88 },
     { label: 't-3', accuracy: 90 },
@@ -78,16 +147,26 @@ export default function App() {
   const liveSeries = useRef<MatchRatePoint[]>([])
 
   const refresh = useCallback(async () => {
+    let locs: LocationDef[] = []
     try {
-      const [dash, locs, preds, nac] = await Promise.all([
+      locs = await api.locations()
+      setLocations(locs)
+      setMarkers((prev) => mergeLiveMarkers(prev, markersFromLocations(locs)))
+      setSelectedId((cur) => cur ?? locs[0]?.id ?? null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load locations')
+    }
+
+    try {
+      const [dash, preds, nac] = await Promise.all([
         api.dashboardStats(),
-        api.locations(),
         api.predictions(40),
         api.nacStatus(),
       ])
       setStats(dash)
-      setLocations(locs)
-      setMarkers(dash.markers)
+      if (dash.markers.length) {
+        setMarkers((prev) => mergeLiveMarkers(prev.length ? prev : markersFromLocations(locs), dash.markers))
+      }
       setPredictions(preds)
       setSandbox(nac.sandbox_mode)
       if (dash.model_accuracy != null) {
@@ -99,14 +178,19 @@ export default function App() {
           }))
         })
       }
-      setSelectedId((cur) => cur ?? dash.markers[0]?.location_id ?? null)
+      setSelectedId((cur) => cur ?? dash.markers[0]?.location_id ?? locs[0]?.id ?? null)
+      setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load dashboard')
+      if (!locs.length) {
+        setError(err instanceof Error ? err.message : 'Failed to load dashboard')
+      }
     }
   }, [])
 
   useEffect(() => {
     void refresh()
+    const retry = window.setTimeout(() => void refresh(), 2000)
+    return () => window.clearTimeout(retry)
   }, [refresh])
 
   useEffect(() => {
@@ -123,6 +207,7 @@ export default function App() {
         liveSeries.current = []
         setRecording([])
         setFinalResult(null)
+        setLastClipId(msg.clip_id ?? null)
         setSelectedId(msg.location_id)
         activeScenario.current = msg.scenario ?? 'CUSTOM'
         setError(null)
@@ -131,17 +216,10 @@ export default function App() {
       if (msg.type === 'simulation_complete') {
         setSimRunning(false)
         setProgress(100)
+        if (msg.clip_id) setLastClipId(msg.clip_id)
         const scenario = msg.scenario ?? activeScenario.current
         if (scenario === 'NORMAL' || scenario === 'TRAFFIC_JAM' || scenario === 'SLOW') {
           setComparison((prev) => mergeComparison(prev, liveSeries.current, scenario))
-        }
-        if (msg.final_prediction) {
-          setFinalResult({
-            ...msg.final_prediction,
-            location_name: msg.location_name,
-            scenario,
-          })
-          setProbabilities(msg.final_prediction.probabilities)
         }
         void refresh()
         return
@@ -151,65 +229,29 @@ export default function App() {
         setError(msg.message)
         return
       }
-      if (msg.type === 'prediction_update') {
-        const update = msg as PredictionUpdate
-        setProgress(update.progress)
-        setProbabilities(update.probabilities)
-        const point = { t: update.sample_index, match_rate: update.match_rate }
+      if (msg.type === 'recording_update') {
+        setProgress(msg.progress)
+        if (msg.clip_id) setLastClipId(msg.clip_id)
+        const point = { t: msg.sample_index, match_rate: msg.match_rate }
         liveSeries.current = [...liveSeries.current, point].slice(-60)
         setMatchSeries(liveSeries.current)
         setComparison((prev) => mergeComparison(prev, liveSeries.current, 'current'))
+        // Update confidence bars live from the current signal level
+        setProbabilities(probsFromMatchRate(msg.match_rate))
         setRecording((prev) =>
           [
             {
-              timestamp: update.timestamp,
-              match_rate: update.match_rate,
-              rsrp: update.rsrp,
-              rsrq: update.rsrq,
-              actual_traffic: update.actual_traffic,
-              predicted_traffic: update.prediction,
-              correct: update.correct,
-              confidence: update.confidence,
+              timestamp: msg.timestamp,
+              match_rate: msg.match_rate,
+              rsrp: msg.rsrp,
+              rsrq: msg.rsrq,
+              actual_traffic: msg.actual_traffic,
+              predicted_traffic: '—',
+              correct: false,
+              confidence: 0,
             },
             ...prev,
           ].slice(0, 60),
-        )
-        setMarkers((prev) =>
-          prev.map((m) =>
-            m.location_id === update.location_id
-              ? {
-                  ...m,
-                  prediction: update.prediction,
-                  confidence: update.confidence,
-                  match_rate: update.match_rate,
-                  updated_at: update.timestamp,
-                  pulsing: true,
-                  latitude: update.latitude,
-                  longitude: update.longitude,
-                }
-              : { ...m, pulsing: false },
-          ),
-        )
-        setPredictions((prev) =>
-          [
-            {
-              id: update.prediction_id ?? `${update.timestamp}-${update.location_id}`,
-              timestamp: update.timestamp,
-              location_id: update.location_id,
-              predicted_state: update.prediction,
-              confidence: update.confidence,
-              model_version: 'poc-v0.1',
-            },
-            ...prev,
-          ].slice(0, 40),
-        )
-        setStats((prev) =>
-          prev
-            ? {
-                ...prev,
-                latest_confidence: update.confidence,
-              }
-            : prev,
         )
       }
     },
@@ -235,85 +277,222 @@ export default function App() {
 
   return (
     <div className="dashboard">
-      <Header live={wsLive} sandbox={sandbox} clock={clock} />
+      <Header
+        live={wsLive}
+        sandbox={sandbox}
+        clock={clock}
+        tab={tab}
+        recording={simRunning}
+        onTabChange={setTab}
+      />
 
       {error && <div className="banner error">{error}</div>}
 
       <div className="dash-body">
         <StatsCards
+          mode={tab}
           trafficHealth={stats?.traffic_health_pct ?? 100}
           activeAnchors={stats?.active_anchors ?? locations.length}
           modelAccuracy={stats?.model_accuracy ?? null}
           latestConfidence={stats?.latest_confidence ?? null}
+          totalReadings={stats?.total_readings}
+          totalClips={stats?.total_clips}
         />
 
-        <div className="main-grid">
-          <div className="col-map">
-            <TrafficMap
-              markers={mapMarkers}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-            />
-          </div>
-
-          <div className="col-side">
-            <SimulationPanel
-              locations={locations}
-              running={simRunning}
-              progress={progress}
-              busyLabel={busy}
-              onRun={(opts) => {
-                void (async () => {
-                  setError(null)
-                  try {
-                    await api.runSimulation({ ...opts, duration_seconds: 60 })
-                  } catch (err) {
-                    setError(err instanceof Error ? err.message : 'Simulation failed')
+        {tab === 'data' && (
+          <>
+            <div className="main-grid">
+              <div className="col-map">
+                <TrafficMap
+                  markers={mapMarkers}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                />
+              </div>
+              <div className="col-side">
+                <DataLoadPanel
+                  loading={busy === 'seed'}
+                  loaded={(stats?.total_clips ?? 0) > 0}
+                  totalClips={stats?.total_clips ?? 0}
+                  totalZones={stats?.active_anchors ?? 0}
+                  onLoad={() =>
+                    runAction('seed', async () => {
+                      await api.seedDemo(true, classZones)
+                    })
                   }
-                })()
-              }}
-              onSeedDemo={() =>
-                runAction('seed', async () => {
-                  await api.seedDemo(true)
-                })
-              }
-              onTrain={() =>
-                runAction('train', async () => {
-                  const res = await api.trainModel()
-                  if (res.accuracy != null) {
-                    setAccuracyHistory((prev) => [
-                      ...prev.slice(-4),
-                      { label: 'train', accuracy: res.accuracy },
-                    ])
-                  }
-                })
-              }
-              onPredictMap={() =>
-                runAction('map', async () => {
-                  const res = await api.predictAnchors('full')
-                  setMarkers(
-                    res.markers.map((m) => ({
-                      ...m,
-                      pulsing: true,
-                    })),
-                  )
-                })
-              }
+                />
+              </div>
+            </div>
+          </>
+        )}
+
+        {tab === 'learning' && (
+          <>
+            <div className="main-grid">
+              <div className="col-map">
+                <TrafficMap
+                  markers={mapMarkers}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                />
+              </div>
+              <div className="col-side">
+                <section className="sim-panel">
+                  <h2>🧠 Step 2 — Train the AI</h2>
+                  <p className="sim-copy">
+                    The AI studies the loaded signal data and learns to recognise each traffic
+                    condition by its unique 5G radio fingerprint. No cameras. No sensors.
+                  </p>
+                  <div className="sim-actions">
+                    <button
+                      className="primary"
+                      disabled={!!busy}
+                      onClick={() =>
+                        runAction('train', async () => {
+                          const res = await api.trainModel()
+                          if (res.accuracy != null) {
+                            setAccuracyHistory((prev) => [
+                              ...prev.slice(-4),
+                              { label: 'train', accuracy: res.accuracy },
+                            ])
+                          }
+                        })
+                      }
+                    >
+                      {busy === 'train' ? 'Training…' : '🎓 Train the AI'}
+                    </button>
+                  </div>
+                  {stats?.model_accuracy != null && (
+                    <p className="hint">
+                      ✅ Model trained — {stats.model_accuracy.toFixed(0)}% accuracy on test data
+                    </p>
+                  )}
+                </section>
+              </div>
+            </div>
+            <Charts
+              mode="learning"
+              matchSeries={matchSeries}
+              comparison={comparison}
+              probabilities={probabilities}
+              accuracyHistory={accuracyHistory}
             />
-            <SamplePredict />
-            <FinalPrediction result={finalResult} />
-            <PredictionFeed items={predictions} />
-          </div>
-        </div>
+          </>
+        )}
 
-        <Charts
-          matchSeries={matchSeries}
-          comparison={comparison}
-          probabilities={probabilities}
-          accuracyHistory={accuracyHistory}
-        />
+        {tab === 'prediction' && (
+          <>
+            <div className="main-grid">
+              <div className="col-map">
+                <TrafficMap
+                  markers={mapMarkers}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                />
+              </div>
 
-        <DataTable rows={recording} />
+              <div className="col-side">
+                <SimulationPanel
+                  mode="generate"
+                  locations={locations}
+                  running={simRunning}
+                  progress={progress}
+                  busyLabel={busy}
+                  hasClip={!!lastClipId || (stats?.total_clips ?? 0) > 0}
+                  onRun={(opts) => {
+                    void (async () => {
+                      setError(null)
+                      try {
+                        await api.runSimulation({ ...opts, duration_seconds: 60 })
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : 'Simulation failed')
+                      }
+                    })()
+                  }}
+                />
+                <SimulationPanel
+                  mode="predict"
+                  running={simRunning}
+                  busyLabel={busy}
+                  hasClip={!!lastClipId || (stats?.total_clips ?? 0) > 0}
+                  onPredictClip={() =>
+                    runAction('clip', async () => {
+                      const res = await api.predictClip({
+                        clip_id: lastClipId || undefined,
+                        location_id: selectedId || undefined,
+                      })
+                      setLastClipId(res.clip_id)
+                      setFinalResult({
+                        prediction: res.prediction,
+                        confidence: res.confidence,
+                        match_rate: res.match_rate,
+                        rsrp: res.rsrp,
+                        rsrq: res.rsrq,
+                        neighbor_count: res.neighbor_count,
+                        actual_traffic: res.actual_traffic,
+                        explanation: res.explanation,
+                        timestamp: res.timestamp,
+                        location_name: res.location_name,
+                        wander: res.wander,
+                        jitter: res.jitter,
+                      })
+                      setProbabilities(res.probabilities)
+                      setMarkers((prev) =>
+                        prev.map((m) =>
+                          m.location_id === res.location_id
+                            ? {
+                                ...m,
+                                prediction: res.prediction,
+                                confidence: res.confidence,
+                                match_rate: res.match_rate,
+                                rsrp: res.rsrp,
+                                updated_at: res.timestamp,
+                                pulsing: true,
+                              }
+                            : { ...m, pulsing: false },
+                        ),
+                      )
+                      setPredictions((prev) =>
+                        [
+                          {
+                            id: `${res.timestamp}-${res.location_id}`,
+                            timestamp: res.timestamp,
+                            location_id: res.location_id,
+                            predicted_state: res.prediction,
+                            confidence: res.confidence,
+                            model_version: 'poc-v0.1',
+                          },
+                          ...prev,
+                        ].slice(0, 40),
+                      )
+                    })
+                  }
+                  onPredictMap={() =>
+                    runAction('map', async () => {
+                      const res = await api.predictAnchors('full')
+                      setMarkers(
+                        res.markers.map((m) => ({
+                          ...m,
+                          pulsing: true,
+                        })),
+                      )
+                    })
+                  }
+                />
+                <FinalPrediction result={finalResult} />
+                <PredictionFeed items={predictions} />
+              </div>
+            </div>
+
+            <Charts
+              mode="prediction"
+              matchSeries={matchSeries}
+              comparison={comparison}
+              probabilities={probabilities}
+              accuracyHistory={accuracyHistory}
+            />
+          </>
+        )}
       </div>
     </div>
   )

@@ -9,10 +9,9 @@
   --accent: #00d4ff;
   --accent-dim: rgba(0, 212, 255, 0.12);
   --pink: #ff2d78;
-  --pink-dim: rgba(255, 45, 120, 0.12);
   --warn: #f4c95f;
   --danger: #ff2d78;
-  --info: #00d4ff;
+  --info: #00bcd4;
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-display: 'Space Grotesk', system-ui, sans-serif;
   color-scheme: dark;
@@ -32,9 +31,9 @@ body,
 body {
   font-family: var(--font-sans);
   background:
-    radial-gradient(ellipse 80% 50% at 10% -10%, rgba(0, 212, 255, 0.07), transparent 50%),
-    radial-gradient(ellipse 60% 40% at 90% 5%, rgba(255, 45, 120, 0.07), transparent 45%),
-    linear-gradient(180deg, var(--bg-deep) 0%, var(--bg) 100%);
+    radial-gradient(ellipse 90% 55% at 8% -8%, rgba(0, 212, 255, 0.07), transparent 50%),
+    radial-gradient(ellipse 70% 45% at 95% 0%, rgba(255, 45, 120, 0.07), transparent 48%),
+    linear-gradient(165deg, var(--bg-deep) 0%, var(--bg) 50%, #0a0a18 100%);
   color: var(--text);
   line-height: 1.5;
 }
@@ -52,7 +51,6 @@ button {
   color: var(--text);
   border-radius: 8px;
   padding: 0.5rem 0.9rem;
-  font-weight: 500;
   transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
 }
 
@@ -66,22 +64,22 @@ button:active:not(:disabled) {
 }
 
 button:disabled {
-  opacity: 0.4;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
 button.primary {
   background: linear-gradient(135deg, #0099cc, var(--accent));
   border-color: transparent;
-  color: #000d12;
+  color: #020d14;
   font-weight: 700;
+  font-family: var(--font-display);
   letter-spacing: 0.02em;
 }
 
 button.primary:hover:not(:disabled) {
   background: linear-gradient(135deg, #00b8e6, #33ddff);
 }
-
 
 @keyframes fade-up {
   from {
@@ -112,8 +110,8 @@ button.primary:hover:not(:disabled) {
 
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
-  background: #16162a;
-  color: #f0f0ff;
-  border: 1px solid rgba(0, 212, 255, 0.25);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--line);
 }
+

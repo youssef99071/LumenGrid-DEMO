@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.anchor_reading import OCCUPANCY_ORDER, RecordingClip
 from app.models.traffic_prediction import TrafficPrediction
+from app.services.towers import radio_overlay
 from app.services.clip_features import (
     CLIP_LEN,
     extract_clip_features,
@@ -231,6 +232,84 @@ def _rule_fallback_clip(
     return state, 0.8, probs
 
 
+def predict_stored_clip(
+    db: Session,
+    *,
+    clip_id: Optional[str] = None,
+    location_id: Optional[str] = None,
+    modality: str = "full",
+) -> Dict[str, Any]:
+    """Match occupancy on an already-generated clip. Does not synthesize data."""
+    from app.services.data_generator import MODEL_VERSION, explain_prediction
+    from app.services.locations import get_location
+
+    query = db.query(RecordingClip).options(joinedload(RecordingClip.samples))
+    if clip_id:
+        clip = query.filter(RecordingClip.id == clip_id).first()
+    elif location_id:
+        clip = (
+            query.filter(RecordingClip.anchor_id == location_id)
+            .order_by(RecordingClip.start_time.desc())
+            .first()
+        )
+    else:
+        clip = query.order_by(RecordingClip.start_time.desc()).first()
+    if clip is None or not clip.samples:
+        raise ValueError("No stored clip to predict — generate data first")
+
+    loc = get_location(clip.anchor_id)
+    samples = samples_from_readings(clip.samples)
+    state, confidence, probs = predict_clip(samples, modality=modality)
+    feats = extract_clip_features(samples, modality="full")
+    pred = TrafficPrediction(
+        timestamp=clip.end_time,
+        location_id=clip.anchor_id,
+        predicted_state=state,
+        confidence=confidence,
+        model_version=_meta.get("model_version", MODEL_VERSION),
+    )
+    db.add(pred)
+    db.commit()
+    db.refresh(pred)
+    match_rate = int(round(feats.get("match_rate_mean", 0)))
+    rsrp = int(round(feats.get("rsrp_mean", 0)))
+    rsrq = int(round(feats.get("rsrq_mean", 0)))
+    neighbor_count = int(round(feats.get("neighbor_count_mean", 0)))
+    explanation = explain_prediction(
+        predicted_state=state,
+        confidence=confidence,
+        match_rate=match_rate,
+        rsrp=rsrp,
+        rsrq=rsrq,
+        neighbor_count=neighbor_count,
+        location_name=(loc or {}).get("name", clip.anchor_id),
+        modality=modality,
+        wander=feats.get("match_rate_wander"),
+        jitter=feats.get("match_rate_jitter"),
+    )
+    return {
+        "clip_id": clip.id,
+        "location_id": clip.anchor_id,
+        "location_name": (loc or {}).get("name", clip.anchor_id),
+        "prediction": state,
+        "confidence": confidence,
+        "probabilities": probs,
+        "match_rate": match_rate,
+        "rsrp": rsrp,
+        "rsrq": rsrq,
+        "neighbor_count": neighbor_count,
+        "wander": round(feats.get("match_rate_wander", 0), 2),
+        "jitter": round(feats.get("match_rate_jitter", 0), 2),
+        "actual_traffic": clip.traffic_label,
+        "explanation": explanation,
+        "timestamp": pred.timestamp.isoformat(),
+        "correct": state == clip.traffic_label,
+        "sample_count": len(samples),
+        "modality": modality,
+        "unit": "60s_clip",
+    }
+
+
 def predict_all_anchors(db: Session, *, modality: str = "full") -> List[Dict[str, Any]]:
     """Latest 60s clip per anchor → occupancy prediction for the map."""
     from app.services.locations import LOCATION_BY_ID
@@ -271,6 +350,7 @@ def predict_all_anchors(db: Session, *, modality: str = "full") -> List[Dict[str
                     "modality": modality,
                     "clip_id": None,
                     "updated_at": None,
+                    **radio_overlay(loc["latitude"], loc["longitude"], rsrp=-70, match_rate=85),
                 }
             )
             continue
@@ -303,6 +383,12 @@ def predict_all_anchors(db: Session, *, modality: str = "full") -> List[Dict[str
                 "modality": modality,
                 "clip_id": clip.id,
                 "updated_at": clip.end_time.isoformat(),
+                **radio_overlay(
+                    loc["latitude"],
+                    loc["longitude"],
+                    match_rate=feats.get("match_rate_mean"),
+                    rsrp=feats.get("rsrp_mean"),
+                ),
             }
         )
     db.commit()

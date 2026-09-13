@@ -12,6 +12,7 @@ from app.models.schemas import (
     DatasetStatsResponse,
     GenerateDatasetRequest,
     GenerateDatasetResponse,
+    SeedDemoRequest,
 )
 from app.services.data_generator import generate_dataset, get_dataset_stats, seed_demo_dataset
 
@@ -30,14 +31,20 @@ def generate(
         duration_minutes=body.duration_minutes,
         sample_interval_seconds=body.sample_interval_seconds,
         clear_existing=body.clear_existing,
+        zones=[z.model_dump() for z in body.zones] or None,
     )
     return GenerateDatasetResponse(**result)
 
 
 @router.post("/seed-demo")
-def seed_demo(force: bool = False, db: Session = Depends(get_db)) -> dict:
-    """Pre-load 7 days of demo data for the 3 Tunis corridor locations."""
-    return seed_demo_dataset(db, force=force)
+def seed_demo(
+    force: bool = False,
+    body: SeedDemoRequest | None = None,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Generate 7 days of labeled clips from map class areas, or default anchors."""
+    zones = [z.model_dump() for z in (body.zones if body else [])]
+    return seed_demo_dataset(db, force=force, zones=zones or None)
 
 
 @router.get("/stats", response_model=DatasetStatsResponse)

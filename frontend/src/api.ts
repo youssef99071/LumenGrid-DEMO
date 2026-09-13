@@ -23,6 +23,10 @@ export interface MapMarker {
   prediction: TrafficState | string
   confidence: number
   match_rate: number | null
+  rsrp?: number | null
+  rssi_dbm?: number[] | null
+  real_distance_m?: number[] | null
+  camara_distance_m?: number[] | null
   updated_at: string | null
   pulsing?: boolean
 }
@@ -34,6 +38,7 @@ export interface DashboardStats {
   latest_confidence: number | null
   total_readings: number
   total_predictions: number
+  total_clips?: number
   markers: MapMarker[]
 }
 
@@ -82,30 +87,27 @@ export interface MatchRatePoint {
   match_rate: number
 }
 
-export interface PredictionUpdate {
-  type: 'prediction_update'
+export interface RecordingUpdate {
+  type: 'recording_update'
   location_id: string
   latitude: number
   longitude: number
-  prediction: string
-  confidence: number
   match_rate: number
   rsrp: number
   rsrq: number
   neighbor_count: number
   actual_traffic: string
-  correct: boolean
-  probabilities: Record<string, number>
   progress: number
   sample_index: number
   total_samples: number
   timestamp: string
-  prediction_id?: string
+  clip_id?: string
   reading_id?: string
+  scenario?: string
 }
 
 export type WsMessage =
-  | PredictionUpdate
+  | RecordingUpdate
   | {
       type: 'simulation_started'
       location_id: string
@@ -113,6 +115,7 @@ export type WsMessage =
       duration_seconds: number
       speed: number
       scenario?: string
+      clip_id?: string
     }
   | {
       type: 'simulation_complete'
@@ -120,22 +123,78 @@ export type WsMessage =
       samples: number
       scenario?: string
       location_name?: string
-      final_prediction?: {
-        prediction: string
-        confidence: number
-        match_rate: number
-        rsrp: number
-        rsrq: number
-        neighbor_count: number
-        actual_traffic: string
-        probabilities: Record<string, number>
-        explanation: string
-        timestamp: string
-      }
+      clip_id?: string
+      actual_traffic?: string
     }
   | { type: 'error'; message: string }
 
 const BASE = ''
+const LOCATIONS_CACHE_KEY = 'lumengrid.locations.v1'
+
+function isLocation(value: unknown): value is LocationDef {
+  if (!value || typeof value !== 'object') return false
+  const loc = value as LocationDef
+  return (
+    typeof loc.id === 'string' &&
+    typeof loc.name === 'string' &&
+    typeof loc.district === 'string' &&
+    typeof loc.latitude === 'number' &&
+    typeof loc.longitude === 'number'
+  )
+}
+
+export function readCachedLocations(): LocationDef[] {
+  try {
+    const raw = localStorage.getItem(LOCATIONS_CACHE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    return Array.isArray(parsed) ? parsed.filter(isLocation) : []
+  } catch {
+    return []
+  }
+}
+
+function writeCachedLocations(locs: LocationDef[]) {
+  memoryLocations = locs
+  try {
+    localStorage.setItem(LOCATIONS_CACHE_KEY, JSON.stringify(locs))
+  } catch {
+    /* ignore quota / private-mode */
+  }
+}
+
+let memoryLocations: LocationDef[] = readCachedLocations()
+let locationsInflight: Promise<LocationDef[]> | null = null
+let locationsSynced = false
+
+async function syncLocations(): Promise<LocationDef[]> {
+  if (locationsInflight) return locationsInflight
+  locationsInflight = request<LocationDef[]>('/api/locations')
+    .then((locs) => {
+      if (locs.length) writeCachedLocations(locs)
+      locationsSynced = true
+      return memoryLocations.length ? memoryLocations : locs
+    })
+    .catch((err) => {
+      if (memoryLocations.length) {
+        locationsSynced = true
+        return memoryLocations
+      }
+      throw err
+    })
+    .finally(() => {
+      locationsInflight = null
+    })
+  return locationsInflight
+}
+
+async function fetchLocations(force = false): Promise<LocationDef[]> {
+  if (!force && memoryLocations.length) {
+    if (!locationsSynced) void syncLocations()
+    return memoryLocations
+  }
+  return syncLocations()
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -152,7 +211,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: () => request<{ status: string; sandbox_mode: boolean }>('/health'),
   nacStatus: () => request<NaCStatus>('/api/nac/status'),
-  locations: () => request<LocationDef[]>('/api/locations'),
+  locations: (force = false) => fetchLocations(force),
   dashboardStats: () => request<DashboardStats>('/api/dashboard/stats'),
   predictions: (limit = 40) =>
     request<TrafficPrediction[]>(`/api/predictions?limit=${limit}`),
@@ -166,28 +225,61 @@ export const api = {
     request<{ readings_created: number }>('/api/dataset/generate', {
       method: 'POST',
       body: JSON.stringify({
-        num_anchors: 3,
+        num_anchors: 10,
         duration_minutes: 60,
         sample_interval_seconds: 60,
         clear_existing: true,
         ...body,
       }),
     }),
-  seedDemo: (force = true) =>
+  seedDemo: (force = true, zones?: Array<{
+    id: string
+    latitude: number
+    longitude: number
+    label: TrafficState
+    radius_m: number
+  }>) =>
     request<{
       seeded: boolean
       readings_created?: number
+      clips_created?: number
       model_accuracy?: number
-    }>(`/api/dataset/seed-demo?force=${force}`, { method: 'POST' }),
+    }>(`/api/dataset/seed-demo?force=${force}`, {
+      method: 'POST',
+      body: JSON.stringify({ zones: zones ?? [] }),
+    }),
   trainModel: () =>
     request<{ trained: boolean; accuracy: number; model_version: string; n_readings: number }>(
       '/api/ml/train',
       { method: 'POST' },
     ),
   modelStatus: () => request<{ ready: boolean; accuracy?: number; model_version?: string }>('/api/ml/status'),
+  predictClip: (body?: {
+    modality?: 'full' | 'gps_camara' | 'cell_camara' | 'gps_cell_camara'
+    clip_id?: string
+    location_id?: string
+  }) =>
+    request<{
+      clip_id: string
+      location_id: string
+      location_name: string
+      prediction: string
+      confidence: number
+      probabilities: Record<string, number>
+      explanation: string
+      match_rate: number
+      rsrp: number
+      rsrq: number
+      neighbor_count: number
+      wander: number
+      jitter: number
+      actual_traffic: string
+      timestamp: string
+      sample_count: number
+      correct: boolean
+    }>('/api/ml/predict-clip', { method: 'POST', body: JSON.stringify(body ?? {}) }),
   samplePredict: (body: {
     modality: 'full' | 'gps_camara' | 'cell_camara' | 'gps_cell_camara'
-    scenario?: 'EMPTY' | 'LOW_OCCUPANCY' | 'NORMAL' | 'SLOW' | 'TRAFFIC_JAM'
     samples?: Array<{
       match_rate: number
       rsrp?: number
@@ -196,8 +288,8 @@ export const api = {
       latitude?: number
       longitude?: number
     }>
-    latitude?: number
-    longitude?: number
+    clip_id?: string
+    location_id?: string
     location_name?: string
   }) =>
     request<{
@@ -247,13 +339,14 @@ export interface TowerPoint {
   radio: string
   mcc: number
   mnc: number
+  operator?: string
   cell: number
 }
 
 export interface TowerLayerResponse {
   operator: string
   mcc: number
-  mnc: number
+  mnc: number | null
   source: string
   attribution: string
   count: number

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import List, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Response, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -51,6 +51,10 @@ class MarkerOut(BaseModel):
     prediction: str
     confidence: float
     match_rate: int | None = None
+    rsrp: int | None = None
+    rssi_dbm: List[int] | None = None
+    real_distance_m: List[float] | None = None
+    camara_distance_m: List[float] | None = None
     updated_at: str | None = None
 
 
@@ -66,7 +70,8 @@ class DashboardStatsOut(BaseModel):
 
 
 @router.get("/api/locations", response_model=List[LocationOut])
-def get_locations() -> List[LocationOut]:
+def get_locations(response: Response) -> List[LocationOut]:
+    response.headers["Cache-Control"] = "public, max-age=3600"
     return [LocationOut(**loc) for loc in list_locations()]
 
 

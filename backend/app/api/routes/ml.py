@@ -9,16 +9,15 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.services.clip_features import CLIP_LEN, extract_clip_features, synthesize_clip_samples
-from app.services.data_generator import _metrics_for_label, explain_prediction
-from app.models.anchor_reading import TrafficLabel
+from app.services.clip_features import CLIP_LEN, extract_clip_features
+from app.services.data_generator import explain_prediction
 from app.services.ml_model import (
     model_status,
     predict_all_anchors,
     predict_clip,
+    predict_stored_clip,
     train_occupancy_model,
 )
-import random
 
 router = APIRouter(prefix="/api/ml", tags=["ml"])
 
@@ -45,17 +44,19 @@ class ClipSample(BaseModel):
 
 
 class SamplePredictRequest(BaseModel):
-    """Infer from an explicit 60s sequence, or synthesize one from a What-If class."""
+    """Infer from an explicit 60s sequence already collected (no data generation)."""
 
     modality: Literal["full", "gps_camara", "cell_camara", "gps_cell_camara"] = "full"
     samples: Optional[List[ClipSample]] = None
-    # Convenience: generate a synthetic 60s clip for a target class
-    scenario: Optional[
-        Literal["EMPTY", "LOW_OCCUPANCY", "NORMAL", "SLOW", "TRAFFIC_JAM"]
-    ] = None
-    latitude: float = 36.7992
-    longitude: float = 10.1802
+    clip_id: Optional[str] = None
+    location_id: Optional[str] = None
     location_name: str = ""
+
+
+class StoredClipPredictRequest(BaseModel):
+    modality: Literal["full", "gps_camara", "cell_camara", "gps_cell_camara"] = "full"
+    clip_id: Optional[str] = None
+    location_id: Optional[str] = None
 
 
 class SamplePredictResponse(BaseModel):
@@ -88,51 +89,71 @@ def train_model(db: Session = Depends(get_db)) -> TrainResponse:
 
 
 @router.post("/predict", response_model=SamplePredictResponse)
-def sample_predict(body: SamplePredictRequest) -> SamplePredictResponse:
+def sample_predict(body: SamplePredictRequest, db: Session = Depends(get_db)) -> SamplePredictResponse:
     if body.samples and len(body.samples) > 0:
         samples = [s.model_dump() for s in body.samples]
-    elif body.scenario:
-        rng = random.Random()
-        label = TrafficLabel[body.scenario]
-        samples = synthesize_clip_samples(
-            label_metrics_fn=_metrics_for_label,
-            label=label,
-            rng=rng,
-            lat=body.latitude,
-            lon=body.longitude,
-            duration=CLIP_LEN,
+        state, confidence, probs = predict_clip(samples, modality=body.modality)
+        feats = extract_clip_features(samples, modality="full")
+        explanation = explain_prediction(
+            predicted_state=state,
+            confidence=confidence,
+            match_rate=int(round(feats.get("match_rate_mean", 0))),
+            rsrp=int(round(feats.get("rsrp_mean", 0))),
+            rsrq=int(round(feats.get("rsrq_mean", 0))),
+            neighbor_count=int(round(feats.get("neighbor_count_mean", 0))),
+            location_name=body.location_name,
+            modality=body.modality,
+            wander=feats.get("match_rate_wander"),
+            jitter=feats.get("match_rate_jitter"),
         )
-    else:
-        raise HTTPException(
-            status_code=400,
-            detail="Provide samples[] (60s clip) or scenario to synthesize a 60s clip",
+        return SamplePredictResponse(
+            prediction=state,
+            confidence=confidence,
+            probabilities=probs,
+            modality=body.modality,
+            explanation=explanation,
+            sample_count=len(samples),
+            match_rate_mean=round(feats.get("match_rate_mean", 0), 2),
+            wander=round(feats.get("match_rate_wander", 0), 2),
+            jitter=round(feats.get("match_rate_jitter", 0), 2),
         )
-
-    state, confidence, probs = predict_clip(samples, modality=body.modality)
-    feats = extract_clip_features(samples, modality="full")
-    explanation = explain_prediction(
-        predicted_state=state,
-        confidence=confidence,
-        match_rate=int(round(feats.get("match_rate_mean", 0))),
-        rsrp=int(round(feats.get("rsrp_mean", 0))),
-        rsrq=int(round(feats.get("rsrq_mean", 0))),
-        neighbor_count=int(round(feats.get("neighbor_count_mean", 0))),
-        location_name=body.location_name,
-        modality=body.modality,
-        wander=feats.get("match_rate_wander"),
-        jitter=feats.get("match_rate_jitter"),
-    )
+    try:
+        stored = predict_stored_clip(
+            db,
+            clip_id=body.clip_id,
+            location_id=body.location_id,
+            modality=body.modality,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return SamplePredictResponse(
-        prediction=state,
-        confidence=confidence,
-        probabilities=probs,
+        prediction=stored["prediction"],
+        confidence=stored["confidence"],
+        probabilities=stored["probabilities"],
         modality=body.modality,
-        explanation=explanation,
-        sample_count=len(samples),
-        match_rate_mean=round(feats.get("match_rate_mean", 0), 2),
-        wander=round(feats.get("match_rate_wander", 0), 2),
-        jitter=round(feats.get("match_rate_jitter", 0), 2),
+        explanation=stored["explanation"],
+        sample_count=stored["sample_count"],
+        match_rate_mean=float(stored["match_rate"]),
+        wander=stored["wander"],
+        jitter=stored["jitter"],
     )
+
+
+@router.post("/predict-clip")
+def predict_clip_endpoint(
+    body: StoredClipPredictRequest,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Run inference on a stored clip. Does not generate new samples."""
+    try:
+        return predict_stored_clip(
+            db,
+            clip_id=body.clip_id,
+            location_id=body.location_id,
+            modality=body.modality,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/predict-anchors")

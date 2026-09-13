@@ -26,6 +26,7 @@ interface ChartsProps {
   comparison: ComparisonPoint[]
   probabilities: Record<string, number>
   accuracyHistory: { label: string; accuracy: number }[]
+  mode?: 'data' | 'learning' | 'prediction'
 }
 
 export function Charts({
@@ -33,6 +34,7 @@ export function Charts({
   comparison,
   probabilities,
   accuracyHistory,
+  mode = 'prediction',
 }: ChartsProps) {
   const confData = Object.entries(probabilities).map(([name, value]) => ({
     name: name.replace('_', ' '),
@@ -42,11 +44,34 @@ export function Charts({
   const hasComparison =
     comparison.some((p) => p.NORMAL != null) && comparison.some((p) => p.TRAFFIC_JAM != null)
 
+  if (mode === 'learning') {
+    return (
+      <section className="charts-panel">
+        <div className="chart-block wide">
+          <h3>Historical training accuracy</h3>
+          <div className="chart-box">
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={accuracyHistory}>
+                <CartesianGrid stroke="rgba(94,160,184,0.15)" strokeDasharray="3 3" />
+                <XAxis dataKey="label" tick={{ fill: '#8aa8b5', fontSize: 11 }} />
+                <YAxis domain={[0, 100]} tick={{ fill: '#8aa8b5', fontSize: 11 }} />
+                <Tooltip
+                  contentStyle={{ background: '#0b1f2a', border: '1px solid rgba(94,160,184,0.3)' }}
+                />
+                <Line type="monotone" dataKey="accuracy" stroke="#f4c95f" strokeWidth={2} dot />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section className="charts-panel">
       <div className="chart-block">
         <h3>📶 Live 5G Signal Disruption</h3>
-        <p className="chart-sub">Signal drops when vehicles block the radio waves between towers</p>
+        <p className="chart-sub">The raw signal strength the AI is reading right now — watch it drop during a traffic jam</p>
         <div className="chart-box">
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={matchSeries}>
@@ -54,7 +79,7 @@ export function Charts({
               <XAxis dataKey="t" tick={{ fill: '#8888aa', fontSize: 11 }} unit="s" />
               <YAxis domain={[0, 100]} tick={{ fill: '#8888aa', fontSize: 11 }} />
               <Tooltip
-                contentStyle={{ background: '#16162a', border: '1px solid rgba(0,212,255,0.25)', borderRadius: 8 }}
+                contentStyle={{ background: '#16162a', border: '1px solid rgba(0,212,255,0.2)' }}
               />
               <Line
                 type="monotone"
@@ -63,16 +88,16 @@ export function Charts({
                 strokeWidth={2}
                 dot={false}
                 isAnimationActive={false}
-                name="Signal strength"
               />
             </LineChart>
           </ResponsiveContainer>
         </div>
       </div>
 
+      {mode === 'prediction' && (
       <div className="chart-block">
         <h3>🎯 AI Certainty — What's happening?</h3>
-        <p className="chart-sub">How confident the AI is in each traffic state right now</p>
+        <p className="chart-sub">How confident the AI is in each traffic category right now</p>
         <div className="chart-box">
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={confData}>
@@ -80,51 +105,52 @@ export function Charts({
               <XAxis dataKey="name" tick={{ fill: '#8888aa', fontSize: 11 }} />
               <YAxis domain={[0, 100]} tick={{ fill: '#8888aa', fontSize: 11 }} />
               <Tooltip
-                contentStyle={{ background: '#16162a', border: '1px solid rgba(0,212,255,0.25)', borderRadius: 8 }}
+                contentStyle={{ background: '#16162a', border: '1px solid rgba(0,212,255,0.2)' }}
               />
-              <Bar dataKey="value" fill="#ff2d78" radius={[4, 4, 0, 0]} name="Confidence %" />
+              <Bar dataKey="value" fill="#ff2d78" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
       <div className="chart-block wide">
         <h3>
           {hasComparison
             ? '📊 Scenario Comparison — Clear road vs. Traffic jam'
-            : '📈 AI Track Record — Detection Accuracy Over Time'}
+            : '📈 AI Track Record'}
         </h3>
         <p className="chart-sub">
           {hasComparison
-            ? 'How the 5G signal pattern differs across traffic scenarios'
-            : 'How accurately the AI has been detecting traffic states'}
+            ? 'Side-by-side signal fingerprints — the AI tells them apart instantly'
+            : 'Model accuracy across training sessions'}
         </p>
         <div className="chart-box">
           <ResponsiveContainer width="100%" height={200}>
             {hasComparison ? (
               <LineChart data={comparison}>
-                <CartesianGrid stroke="rgba(0,212,255,0.08)" strokeDasharray="3 3" />
-                <XAxis dataKey="t" tick={{ fill: '#8888aa', fontSize: 11 }} unit="s" />
-                <YAxis domain={[0, 100]} tick={{ fill: '#8888aa', fontSize: 11 }} />
+                <CartesianGrid stroke="rgba(94,160,184,0.15)" strokeDasharray="3 3" />
+                <XAxis dataKey="t" tick={{ fill: '#8aa8b5', fontSize: 11 }} unit="s" />
+                <YAxis domain={[0, 100]} tick={{ fill: '#8aa8b5', fontSize: 11 }} />
                 <Tooltip
-                  contentStyle={{ background: '#16162a', border: '1px solid rgba(0,212,255,0.25)', borderRadius: 8 }}
+                  contentStyle={{ background: '#0b1f2a', border: '1px solid rgba(94,160,184,0.3)' }}
                 />
                 <Legend />
                 <Line
                   type="monotone"
                   dataKey="NORMAL"
-                  stroke="#00d4ff"
+                  stroke="#3ecf8e"
                   strokeWidth={2}
                   dot={false}
-                  name="Normal flow"
+                  name="NORMAL"
                 />
                 <Line
                   type="monotone"
                   dataKey="TRAFFIC_JAM"
-                  stroke="#ff2d78"
+                  stroke="#e07a5f"
                   strokeWidth={2}
                   dot={false}
-                  name="Traffic jam"
+                  name="TRAFFIC_JAM"
                 />
                 {comparison.some((p) => p.current != null) && (
                   <Line
@@ -140,13 +166,13 @@ export function Charts({
               </LineChart>
             ) : (
               <LineChart data={accuracyHistory}>
-                <CartesianGrid stroke="rgba(0,212,255,0.08)" strokeDasharray="3 3" />
-                <XAxis dataKey="label" tick={{ fill: '#8888aa', fontSize: 11 }} />
-                <YAxis domain={[0, 100]} tick={{ fill: '#8888aa', fontSize: 11 }} />
+                <CartesianGrid stroke="rgba(94,160,184,0.15)" strokeDasharray="3 3" />
+                <XAxis dataKey="label" tick={{ fill: '#8aa8b5', fontSize: 11 }} />
+                <YAxis domain={[0, 100]} tick={{ fill: '#8aa8b5', fontSize: 11 }} />
                 <Tooltip
-                  contentStyle={{ background: '#16162a', border: '1px solid rgba(0,212,255,0.25)', borderRadius: 8 }}
+                  contentStyle={{ background: '#0b1f2a', border: '1px solid rgba(94,160,184,0.3)' }}
                 />
-                <Line type="monotone" dataKey="accuracy" stroke="#00d4ff" strokeWidth={2} dot />
+                <Line type="monotone" dataKey="accuracy" stroke="#f4c95f" strokeWidth={2} dot />
               </LineChart>
             )}
           </ResponsiveContainer>
@@ -155,4 +181,3 @@ export function Charts({
     </section>
   )
 }
-

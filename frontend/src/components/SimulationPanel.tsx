@@ -10,11 +10,13 @@ export type WhatIfScenario =
   | 'SLOW'
   | 'TRAFFIC_JAM'
 
-interface SimulationPanelProps {
+interface GenerateProps {
+  mode: 'generate'
   locations: LocationDef[]
   running: boolean
   progress: number
   busyLabel: string | null
+  hasClip: boolean
   onRun: (opts: {
     traffic_intensity: number
     location_id: string
@@ -22,10 +24,18 @@ interface SimulationPanelProps {
     speed: 1 | 5 | 10
     scenario: WhatIfScenario
   }) => void
-  onSeedDemo: () => void
-  onTrain: () => void
-  onPredictMap: () => void
 }
+
+interface PredictProps {
+  mode: 'predict'
+  busyLabel: string | null
+  hasClip: boolean
+  running?: boolean
+  onPredictMap: () => void
+  onPredictClip: () => void
+}
+
+type SimulationPanelProps = GenerateProps | PredictProps
 
 const SCENARIO_HINT: Record<WhatIfScenario, string> = {
   CUSTOM: 'Use the intensity slider for a free-form recording.',
@@ -36,22 +46,49 @@ const SCENARIO_HINT: Record<WhatIfScenario, string> = {
   TRAFFIC_JAM: 'Jam band — match rate 35–55%.',
 }
 
-export function SimulationPanel({
+export function SimulationPanel(props: SimulationPanelProps) {
+  if (props.mode === 'predict') {
+    const { busyLabel, hasClip, running, onPredictClip, onPredictMap } = props
+    const disabled = !!running || !!busyLabel
+    return (
+      <section className="sim-panel">
+        <h2>⚡ Step 3 — Run Live Detection</h2>
+        <p className="sim-copy">
+          Pick a traffic scenario and watch the AI detect it in real time — purely from 5G signal
+          patterns. No cameras involved.
+        </p>
+        <div className="sim-actions">
+          <button className="primary" disabled={disabled || !hasClip} onClick={onPredictClip}>
+            {busyLabel === 'clip' ? 'Detecting…' : '▶ Run Live Detection'}
+          </button>
+          <button disabled={disabled} onClick={onPredictMap}>
+            {busyLabel === 'map' ? 'Scanning…' : '🗺 Scan All Locations on Map'}
+          </button>
+        </div>
+        {!hasClip && (
+          <p className="hint">Go to the Data tab first and load training data to begin.</p>
+        )}
+      </section>
+    )
+  }
+
+  return <GenerateClipForm {...props} />
+}
+
+function GenerateClipForm({
   locations,
   running,
   progress,
   busyLabel,
+  hasClip,
   onRun,
-  onSeedDemo,
-  onTrain,
-  onPredictMap,
-}: SimulationPanelProps) {
+}: GenerateProps) {
   const [intensity, setIntensity] = useState(55)
   const [locationId, setLocationId] = useState('')
   const [timeOfDay, setTimeOfDay] = useState<'morning' | 'afternoon' | 'evening' | 'night'>(
     'morning',
   )
-  const [speed] = useState<1 | 5 | 10>(10)
+  const [speed, setSpeed] = useState<1 | 5 | 10>(10)
   const [scenario, setScenario] = useState<WhatIfScenario>('TRAFFIC_JAM')
 
   useEffect(() => {
@@ -63,91 +100,89 @@ export function SimulationPanel({
 
   return (
     <section className="sim-panel">
-      <h2>🎬 Run the Demo</h2>
+      <h2>🎮 Simulate a Traffic Scenario</h2>
       <p className="sim-copy">
-        See how LumenGrid detects traffic using invisible 5G signals — no cameras, no sensors.
+        Pick what is happening on the road. The system will generate the 5G signal that scenario
+        would produce — then the AI detects it.
       </p>
 
-      {/* Step 1 */}
-      <div className="step-block">
-        <div className="step-header">
-          <span className="step-badge">1</span>
-          <span className="step-title">Load Training Data</span>
-        </div>
-        <p className="step-desc">Feed the AI one week of historical signal data to learn from.</p>
-        <button disabled={disabled} onClick={onSeedDemo} className="step-btn">
-          {busyLabel === 'seed' ? '⏳ Loading data…' : '📥 Load Training Data'}
-        </button>
-      </div>
+      <label className="field">
+        <span>Occupancy class</span>
+        <select
+          value={scenario}
+          disabled={disabled}
+          onChange={(e) => setScenario(e.target.value as WhatIfScenario)}
+        >
+          <option value="EMPTY">🟢 Empty road</option>
+          <option value="LOW_OCCUPANCY">🟡 Light traffic</option>
+          <option value="NORMAL">🟠 Normal flow</option>
+          <option value="SLOW">🔵 Slow / congested</option>
+          <option value="TRAFFIC_JAM">🔴 Traffic jam</option>
+          <option value="CUSTOM">⚙️ Custom (slider)</option>
+        </select>
+        <span className="hint">{SCENARIO_HINT[scenario]}</span>
+      </label>
 
-      {/* Step 2 */}
-      <div className="step-block">
-        <div className="step-header">
-          <span className="step-badge">2</span>
-          <span className="step-title">Train the AI</span>
-        </div>
-        <p className="step-desc">The AI learns to recognize traffic patterns from the 5G signal fingerprint.</p>
-        <button disabled={disabled} onClick={onTrain} className="step-btn">
-          {busyLabel === 'train' ? '⏳ Training AI…' : '🧠 Train the AI (~2 seconds)'}
-        </button>
-      </div>
-
-      {/* Step 3 */}
-      <div className="step-block">
-        <div className="step-header">
-          <span className="step-badge">3</span>
-          <span className="step-title">Run Live Detection</span>
-        </div>
-        <p className="step-desc">Pick a traffic scenario and watch the AI detect it in real time.</p>
-
+      {custom && (
         <label className="field">
-          <span>Traffic scenario</span>
-          <select
-            value={scenario}
+          <span>Traffic intensity · {intensity}%</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={intensity}
             disabled={disabled}
-            onChange={(e) => setScenario(e.target.value as WhatIfScenario)}
-          >
-            <option value="EMPTY">🟢 Empty road</option>
-            <option value="LOW_OCCUPANCY">🔵 Light traffic</option>
-            <option value="NORMAL">🟡 Normal flow</option>
-            <option value="SLOW">🟠 Slow — congestion building</option>
-            <option value="TRAFFIC_JAM">🔴 Traffic jam</option>
-            <option value="CUSTOM">⚙️ Custom (use slider)</option>
-          </select>
-          <span className="hint">{SCENARIO_HINT[scenario]}</span>
+            onChange={(e) => setIntensity(Number(e.target.value))}
+          />
         </label>
+      )}
 
-        {custom && (
-          <label className="field">
-            <span>Traffic intensity · {intensity}%</span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={intensity}
-              disabled={disabled}
-              onChange={(e) => setIntensity(Number(e.target.value))}
-            />
-          </label>
-        )}
+      <label className="field">
+        <span>Location</span>
+        <select
+          value={locationId || locations[0]?.id || ''}
+          disabled={disabled}
+          onChange={(e) => setLocationId(e.target.value)}
+        >
+          {locations.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.name}
+            </option>
+          ))}
+        </select>
+      </label>
 
-        <label className="field">
-          <span>Location</span>
-          <select
-            value={locationId || locations[0]?.id || ''}
-            disabled={disabled}
-            onChange={(e) => setLocationId(e.target.value)}
+      <label className="field">
+        <span>Time of day</span>
+        <select
+          value={timeOfDay}
+          disabled={disabled}
+          onChange={(e) => setTimeOfDay(e.target.value as typeof timeOfDay)}
+        >
+          <option value="morning">Morning</option>
+          <option value="afternoon">Afternoon</option>
+          <option value="evening">Evening</option>
+          <option value="night">Night</option>
+        </select>
+      </label>
+
+      <fieldset className="speed-row" disabled={disabled}>
+        <legend>Recording speed</legend>
+        {([1, 5, 10] as const).map((s) => (
+          <button
+            key={s}
+            type="button"
+            className={speed === s ? 'chip active' : 'chip'}
+            onClick={() => setSpeed(s)}
           >
-            {locations.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
-          </select>
-        </label>
+            {s}x
+          </button>
+        ))}
+      </fieldset>
 
+      <div className="sim-actions">
         <button
-          className="primary step-btn run-btn"
+          className="primary"
           disabled={disabled || !locations.length}
           onClick={() =>
             onRun({
@@ -159,21 +194,17 @@ export function SimulationPanel({
             })
           }
         >
-          {running ? '📡 Detecting… ' : '▶  Run Live Detection'}
+          {running ? 'Generating signal…' : '📡 Generate 5G Signal Clip'}
         </button>
-      </div>
-
-      {/* Bonus action */}
-      <div className="step-block step-block--alt">
-        <button disabled={disabled} onClick={onPredictMap} className="step-btn">
-          {busyLabel === 'map' ? '⏳ Scanning…' : '🗺️ Scan All Locations on Map'}
-        </button>
-        <p className="step-desc">Instantly predict traffic for every monitored zone across Tunis.</p>
       </div>
 
       <div className="progress-wrap">
         <div className="progress-label">
-          {running ? `Detecting… ${progress.toFixed(0)}%` : 'Ready — choose a step above'}
+          {running
+            ? `Generating ${progress.toFixed(0)}%`
+            : hasClip
+              ? 'Clip stored — open Prediction to match it'
+              : 'Idle — generate a clip'}
         </div>
         <div className="progress-track">
           <div className="progress-bar" style={{ width: `${running ? progress : 0}%` }} />
@@ -182,4 +213,3 @@ export function SimulationPanel({
     </section>
   )
 }
-

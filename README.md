@@ -17,19 +17,19 @@ Proof-of-concept: **5G signal scatter → road occupancy**, using Nokia NaC / CA
 
 `EMPTY` → `LOW_OCCUPANCY` → `NORMAL` → `SLOW` → `TRAFFIC_JAM`
 
-## Ooredoo tower layer (MCC 605 / MNC 03)
+## Tunis tower layer (OpenCelliD)
 
-The map can show a dense **Ooredoo Tunisia** radio grid for realism:
+The map loads **real OpenCelliD** Ooredoo cells for Greater Tunis (MCC 605 / MNC 03) via tiled `getInArea` (full history, not the 18-month country dump). The API allows ~1000 calls/day and boxes of at most 4 km²; the script resumes if you run it again after the daily reset.
 
 ```bash
-cd backend && python3 scripts/generate_ooredoo_towers.py
-# → data/ooredoo_towers.json (~45k synthetic cells)
-
-# Optional: drop a real OpenCelliD CSV as data/ooredoo_towers.csv (mcc=605, net=3)
+cd backend
+# OPENCELLID_API_KEY in .env
+PYTHONPATH=.vendor python3 scripts/download_ooredoo_towers.py
+# → data/ooredoo_towers.csv
 curl -X POST http://localhost:8000/api/towers/reload
 ```
 
-Toggle **Show Ooredoo towers** on the map. Clusters expand as you zoom.
+Toggle **Show Ooredoo towers** on the map. Data © [OpenCelliD](https://opencellid.org/) (CC BY-SA 4.0).
 
 Both training and inference operate on **60s sequences** (1 Hz), not single snapshots:
 

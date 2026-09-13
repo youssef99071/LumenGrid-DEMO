@@ -2,12 +2,15 @@ import { useState } from 'react'
 import { api } from '../api'
 import './SamplePredict.css'
 
-type Scenario = 'EMPTY' | 'LOW_OCCUPANCY' | 'NORMAL' | 'SLOW' | 'TRAFFIC_JAM'
 type Modality = 'full' | 'gps_camara' | 'cell_camara'
 
-export function SamplePredict() {
+interface SamplePredictProps {
+  locationId?: string | null
+  locationName?: string
+}
+
+export function SamplePredict({ locationId, locationName }: SamplePredictProps) {
   const [modality, setModality] = useState<Modality>('full')
-  const [scenario, setScenario] = useState<Scenario>('TRAFFIC_JAM')
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{
     prediction: string
@@ -24,14 +27,19 @@ export function SamplePredict() {
     setBusy(true)
     setError(null)
     try {
-      const res = await api.samplePredict({
+      const res = await api.predictClip({
         modality,
-        scenario,
-        latitude: 36.7992,
-        longitude: 10.1802,
-        location_name: 'Sample 60s clip',
+        location_id: locationId || undefined,
       })
-      setResult(res)
+      setResult({
+        prediction: res.prediction,
+        confidence: res.confidence,
+        explanation: res.explanation,
+        sample_count: res.sample_count,
+        match_rate_mean: res.match_rate,
+        wander: res.wander,
+        jitter: res.jitter,
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Predict failed')
     } finally {
@@ -41,10 +49,10 @@ export function SamplePredict() {
 
   return (
     <section className="sample-panel">
-      <h2>Sample 60s clip</h2>
+      <h2>Predict stored clip</h2>
       <p className="sample-copy">
-        Matching uses a full 60-second sequence (wander + jitter), not a single snapshot. Pick a
-        What-If class to synthesize a clip, then run inference.
+        Inference only — uses the latest generated 60s clip
+        {locationName ? ` at ${locationName}` : ''}. Generate data first if none exist.
       </p>
 
       <label className="field">
@@ -56,19 +64,8 @@ export function SamplePredict() {
         </select>
       </label>
 
-      <label className="field">
-        <span>Synthesize 60s clip as</span>
-        <select value={scenario} onChange={(e) => setScenario(e.target.value as Scenario)}>
-          <option value="EMPTY">EMPTY</option>
-          <option value="LOW_OCCUPANCY">LOW OCCUPANCY</option>
-          <option value="NORMAL">NORMAL</option>
-          <option value="SLOW">SLOW</option>
-          <option value="TRAFFIC_JAM">TRAFFIC JAM</option>
-        </select>
-      </label>
-
       <button className="primary" disabled={busy} onClick={() => void run()}>
-        {busy ? 'Matching clip…' : 'Match 60s clip'}
+        {busy ? 'Matching clip…' : 'Predict 60s clip'}
       </button>
 
       {error && <p className="sample-error">{error}</p>}

@@ -83,11 +83,24 @@ class AnchorReadingOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ClassZoneIn(BaseModel):
+    id: str = ""
+    latitude: float = Field(..., ge=-90, le=90)
+    longitude: float = Field(..., ge=-180, le=180)
+    label: Literal["EMPTY", "LOW_OCCUPANCY", "NORMAL", "SLOW", "TRAFFIC_JAM"]
+    radius_m: float = Field(80, ge=20, le=500)
+
+
 class GenerateDatasetRequest(BaseModel):
-    num_anchors: int = Field(5, ge=1, le=50)
+    num_anchors: int = Field(10, ge=1, le=50)
     duration_minutes: int = Field(60, ge=1, le=1440)
     sample_interval_seconds: int = Field(60, ge=10, le=300)
     clear_existing: bool = True
+    zones: List[ClassZoneIn] = []
+
+
+class SeedDemoRequest(BaseModel):
+    zones: List[ClassZoneIn] = []
 
 
 class GenerateDatasetResponse(BaseModel):

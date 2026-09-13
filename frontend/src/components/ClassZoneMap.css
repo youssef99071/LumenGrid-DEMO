@@ -1,0 +1,77 @@
+.zone-map .map-head {
+  align-items: center;
+}
+
+.zone-clear {
+  font-size: 0.78rem;
+}
+
+.zone-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin-bottom: 0.65rem;
+}
+
+.zone-classes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.zone-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.zone-chip.active {
+  border-color: color-mix(in srgb, var(--chip) 55%, transparent);
+  background: color-mix(in srgb, var(--chip) 16%, transparent);
+  color: var(--text);
+}
+
+.zone-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--chip);
+}
+
+.zone-chip em {
+  font-style: normal;
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+.zone-radius {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.zone-radius input {
+  width: 110px;
+  accent-color: var(--accent);
+}
+
+.zone-frame {
+  min-height: 460px;
+  cursor: crosshair;
+}
+
+.zone-marker {
+  background: transparent;
+  border: none;
+}

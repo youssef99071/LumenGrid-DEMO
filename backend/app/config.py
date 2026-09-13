@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     nac_client_id: str = ""
     nac_client_secret: str = ""
     nac_rapidapi_key: str = ""
+    opencellid_api_key: str = ""
 
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 

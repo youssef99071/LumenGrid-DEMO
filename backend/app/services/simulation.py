@@ -1,4 +1,4 @@
-"""Live AI simulation: record a 60s clip, then match occupancy on the full sequence."""
+"""Live What-If recorder: generate a 60s clip. Prediction is a separate ML step."""
 
 from __future__ import annotations
 
@@ -7,17 +7,16 @@ import logging
 import random
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
 from app.models.anchor_reading import AnchorReading, RecordingClip, TrafficLabel
 from app.models.traffic_prediction import TrafficPrediction
-from app.services.clip_features import extract_clip_features, samples_from_readings
-from app.services.data_generator import MODEL_VERSION, explain_prediction, _metrics_for_label
+from app.services.data_generator import _metrics_for_label
 from app.services.locations import LOCATION_BY_ID, get_location
-from app.services.ml_model import predict_clip
+from app.services.towers import radio_overlay
 from app.services.ws_hub import hub
 
 logger = logging.getLogger(__name__)
@@ -105,7 +104,6 @@ async def run_simulation(
     )
 
     db = SessionLocal()
-    tick_rows: List[Dict[str, float]] = []
     try:
         clip = RecordingClip(
             id=clip_id,
@@ -157,71 +155,29 @@ async def run_simulation(
             db.add(reading)
             db.commit()
 
-            tick_rows.append(
-                {
-                    "match_rate": float(metrics["match_rate"]),
-                    "rsrp": float(metrics["rsrp"]),
-                    "rsrq": float(metrics["rsrq"]),
-                    "neighbor_count": float(metrics["neighbor_count"]),
-                    "latitude": lat,
-                    "longitude": lon,
-                }
-            )
-
-            # Live tick for the chart — class match waits until clip is complete
+            # Live tick for the recording chart — prediction is a separate step
             await hub.broadcast(
                 {
-                    "type": "prediction_update",
+                    "type": "recording_update",
                     "location_id": location_id,
                     "latitude": lat,
                     "longitude": lon,
-                    "prediction": clip_label.value,  # provisional ground-truth band
-                    "confidence": 0.0,
                     "match_rate": metrics["match_rate"],
                     "rsrp": metrics["rsrp"],
                     "rsrq": metrics["rsrq"],
                     "neighbor_count": metrics["neighbor_count"],
                     "actual_traffic": clip_label.value,
-                    "correct": False,
-                    "probabilities": {},
                     "reading_id": reading.id,
                     "clip_id": clip_id,
                     "timestamp": ts.isoformat(),
-                    "model_version": MODEL_VERSION,
                     "progress": round((i + 1) / n * 100, 1),
                     "sample_index": i + 1,
                     "total_samples": n,
                     "scenario": scenario,
-                    "interim": True,
                 }
             )
             await asyncio.sleep(interval)
 
-        # ── Clip-level match (learning & inference unit) ──────────────
-        state, confidence, probs = predict_clip(tick_rows, modality="full")
-        feats = extract_clip_features(tick_rows, modality="full")
-        pred = TrafficPrediction(
-            timestamp=start_ts + timedelta(seconds=n - 1),
-            location_id=location_id,
-            predicted_state=state,
-            confidence=confidence,
-            model_version=MODEL_VERSION,
-        )
-        db.add(pred)
-        db.commit()
-        db.refresh(pred)
-
-        explanation = explain_prediction(
-            predicted_state=state,
-            confidence=confidence,
-            match_rate=int(round(feats.get("match_rate_mean", 0))),
-            rsrp=int(round(feats.get("rsrp_mean", 0))),
-            rsrq=int(round(feats.get("rsrq_mean", 0))),
-            neighbor_count=int(round(feats.get("neighbor_count_mean", 0))),
-            location_name=loc["name"],
-            wander=feats.get("match_rate_wander"),
-            jitter=feats.get("match_rate_jitter"),
-        )
         await hub.broadcast(
             {
                 "type": "simulation_complete",
@@ -231,21 +187,7 @@ async def run_simulation(
                 "scenario": scenario,
                 "clip_id": clip_id,
                 "unit": "60s_clip",
-                "final_prediction": {
-                    "prediction": state,
-                    "confidence": confidence,
-                    "match_rate": int(round(feats.get("match_rate_mean", 0))),
-                    "rsrp": int(round(feats.get("rsrp_mean", 0))),
-                    "rsrq": int(round(feats.get("rsrq_mean", 0))),
-                    "neighbor_count": int(round(feats.get("neighbor_count_mean", 0))),
-                    "wander": round(feats.get("match_rate_wander", 0), 2),
-                    "jitter": round(feats.get("match_rate_jitter", 0), 2),
-                    "actual_traffic": clip_label.value,
-                    "probabilities": probs,
-                    "explanation": explanation,
-                    "timestamp": pred.timestamp.isoformat(),
-                    "correct": state == clip_label.value,
-                },
+                "actual_traffic": clip_label.value,
             }
         )
     except Exception as exc:  # noqa: BLE001
@@ -271,6 +213,8 @@ def dashboard_snapshot(db: Session) -> Dict[str, Any]:
     """Aggregate stats for dashboard cards + map markers (clip-based)."""
     from sqlalchemy import func
 
+    from app.services.ml_model import model_status
+
     total_clips = db.query(func.count(RecordingClip.id)).scalar() or 0
     normalish = (
         db.query(func.count(RecordingClip.id))
@@ -286,53 +230,44 @@ def dashboard_snapshot(db: Session) -> Dict[str, Any]:
         .scalar()
         or 0
     )
-    anchors = db.query(func.count(func.distinct(RecordingClip.anchor_id))).scalar() or 0
     latest_pred = (
         db.query(TrafficPrediction).order_by(TrafficPrediction.timestamp.desc()).first()
     )
-
-    recent_preds: List[TrafficPrediction] = (
-        db.query(TrafficPrediction).order_by(TrafficPrediction.timestamp.desc()).limit(200).all()
+    recent_preds = (
+        db.query(TrafficPrediction)
+        .order_by(TrafficPrediction.timestamp.desc())
+        .limit(80)
+        .all()
     )
-    correct = 0
-    compared = 0
+    latest_by_loc: Dict[str, TrafficPrediction] = {}
     for pred in recent_preds:
-        clip = (
-            db.query(RecordingClip)
-            .filter(
-                RecordingClip.anchor_id == pred.location_id,
-                RecordingClip.end_time == pred.timestamp,
-            )
-            .first()
-        )
-        if clip is None:
-            continue
-        compared += 1
-        if clip.traffic_label == pred.predicted_state:
-            correct += 1
-    accuracy = (correct / compared) if compared else None
+        if pred.location_id not in latest_by_loc:
+            latest_by_loc[pred.location_id] = pred
+
+    trained = model_status()
+    accuracy = trained.get("accuracy")
 
     markers = []
     for loc_id, loc in LOCATION_BY_ID.items():
-        pred = (
-            db.query(TrafficPrediction)
-            .filter(TrafficPrediction.location_id == loc_id)
-            .order_by(TrafficPrediction.timestamp.desc())
-            .first()
-        )
+        pred = latest_by_loc.get(loc_id)
         clip = (
             db.query(RecordingClip)
-            .options(joinedload(RecordingClip.samples))
             .filter(RecordingClip.anchor_id == loc_id)
             .order_by(RecordingClip.start_time.desc())
             .first()
         )
+        sample = None
+        if clip is not None:
+            sample = (
+                db.query(AnchorReading)
+                .filter(AnchorReading.clip_id == clip.id, AnchorReading.seq_index == 0)
+                .first()
+            )
         state = pred.predicted_state if pred else "NORMAL"
         conf = pred.confidence if pred else 0.0
-        match_rate = None
-        if clip and clip.samples:
-            feats = extract_clip_features(samples_from_readings(clip.samples))
-            match_rate = int(round(feats.get("match_rate_mean", 0)))
+        match_rate = int(sample.match_rate) if sample is not None else None
+        rsrp = int(sample.rsrp) if sample is not None else None
+        radio = radio_overlay(loc["latitude"], loc["longitude"], match_rate=match_rate, rsrp=rsrp)
         markers.append(
             {
                 "location_id": loc_id,
@@ -344,16 +279,16 @@ def dashboard_snapshot(db: Session) -> Dict[str, Any]:
                 "confidence": conf,
                 "match_rate": match_rate,
                 "updated_at": (pred.timestamp.isoformat() if pred else None),
+                **radio,
             }
         )
 
-    total_readings = db.query(func.count(AnchorReading.id)).scalar() or 0
     return {
         "traffic_health_pct": round((normalish / total_clips) * 100, 1) if total_clips else 100.0,
-        "active_anchors": anchors or len(LOCATION_BY_ID),
-        "model_accuracy": round(accuracy * 100, 1) if accuracy is not None else None,
+        "active_anchors": len(LOCATION_BY_ID),
+        "model_accuracy": float(accuracy) if accuracy is not None else None,
         "latest_confidence": latest_pred.confidence if latest_pred else None,
-        "total_readings": total_readings,
+        "total_readings": total_clips * 60,
         "total_clips": total_clips,
         "total_predictions": db.query(func.count(TrafficPrediction.id)).scalar() or 0,
         "markers": markers,
